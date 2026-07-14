@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "Se utilizar este software, cite conforme abaixo."
+type: software
+title: "AnP — Análise da Paisagem"
+abstract: >
+  Conjunto de quatro plugins QGIS para análise quantitativa de
+  cobertura e uso da terra e fragmentação de paisagens naturais,
+  desenvolvido para uso com dados MapBiomas Coleção 10.
+authors:
+  - family-names: Lemos
+    given-names: Rodrigo Silva
+    orcid: https://orcid.org/0000-0002-6866-6971
+    affiliation: >
+      Departamento de Geografia e Planejamento Ambiental,
+      IGCE — Unesp Rio Claro
+    email: rodrigo.s.lemos@unesp.br
+version: "1.0"
+date-released: 2025-01-01
+license: GPL-3.0
+repository-code: https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+keywords:
+  - MapBiomas
+  - QGIS
+  - ecologia da paisagem
+  - fragmentação
+  - cobertura da terra
+  - geoprocessamento
