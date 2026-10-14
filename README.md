@@ -5,8 +5,8 @@ Conjunto de plugins QGIS para análise de cobertura e uso da terra e fragmentaç
 
 | Arquivo | Plugin | Módulos |
 |---|---|---|
-| `AnP_Analise_Monitoria_v1.0.3.zip` | AnP - Análise e Monitoria da Paisagem (v1.0.3) | Preparação (alinhar/recortar/reprojetar), Monitoria (comparação entre dois anos e matriz de transição) e Relatório (composição multi-ano) |
-| `AnP_Fragmentacao_v1.0.zip` | AnP - Fragmentação da Paisagem (v1.0) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
+| `AnP_Analise_Monitoria_v1.0.4.zip` | AnP - Análise e Monitoria da Paisagem (v1.0.4) | Preparação (alinhar/recortar/reprojetar), Monitoria (comparação entre dois anos e matriz de transição) e Relatório (composição multi-ano) |
+| `AnP_Fragmentacao_v1.0.1.zip` | AnP - Fragmentação da Paisagem (v1.0.1) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
 
 Os plugins Preparação, Monitoria e Relatório, distribuídos separadamente até a versão 1.0, agora fazem parte de um único plugin com menu de seleção de módulo.
 

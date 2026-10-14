@@ -8,7 +8,9 @@ abstract: >
   desenvolvido para uso com dados MapBiomas Coleção 10:
   AnP - Análise e Monitoria da Paisagem (módulos Preparação,
   Monitoria e Relatório) e AnP - Fragmentação da Paisagem
-  (análise temporal e análise de fragmentos).
+  (análise temporal e análise de fragmentos). 
+  LEMOS, Rodrigo Silva. AnP — Análise da Paisagem: conjunto de plugins QGIS para análise de cobertura e uso da terra e fragmentação de paisagens naturais. Rio Claro: Departamento de Geografia e Planejamento Ambiental, IGCE — Unesp, 2025. Disponível em: https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP. DOI: 10.5281/zenodo.21364767
+
 authors:
   - family-names: Lemos
     given-names: Rodrigo Silva
@@ -22,6 +24,22 @@ date-released: 2026-10-14
 doi: 10.5281/zenodo.21364767
 license: GPL-3.0
 repository-code: https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+preferred-citation:
+  type: software
+  title: >-
+    AnP — Análise da Paisagem: conjunto de plugins QGIS para análise de
+    cobertura e uso da terra e fragmentação de paisagens naturais
+  authors:
+    - family-names: Lemos
+      given-names: Rodrigo Silva
+      orcid: https://orcid.org/0000-0002-6866-6971
+  year: 2025
+  location:
+    name: Rio Claro
+  publisher:
+    name: Departamento de Geografia e Planejamento Ambiental, IGCE — Unesp
+  url: https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+  doi: 10.5281/zenodo.21364767
 keywords:
   - MapBiomas
   - QGIS
