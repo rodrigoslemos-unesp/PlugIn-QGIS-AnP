@@ -3,18 +3,26 @@ Conjunto de plugins QGIS para análise de cobertura e uso da terra e fragmentaç
 
 ## Plugins (versão 1.1)
 
-| Arquivo | Plugin | Módulos |
-|---|---|---|
-| `AnP_Analise_Monitoria_v1.0.4.zip` | AnP - Análise e Monitoria da Paisagem (v1.0.4) | Preparação (alinhar/recortar/reprojetar), Monitoria (comparação entre dois anos e matriz de transição) e Relatório (composição multi-ano) |
-| `AnP_Fragmentacao_v1.0.1.zip` | AnP - Fragmentação da Paisagem (v1.0.1) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
+Os arquivos de instalação (`.zip`) estão na página de [Releases](https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP/releases/latest). O código-fonte de cada plugin está na pasta indicada na tabela.
 
-Os plugins Preparação, Monitoria e Relatório, distribuídos separadamente até a versão 1.0, agora fazem parte de um único plugin com menu de seleção de módulo.
+| Arquivo (Releases) | Código-fonte | Plugin | Módulos |
+|---|---|---|---|
+| `AnP_Analise_Monitoria_v1.1.zip` | [`anp_analise_monitoria/`](anp_analise_monitoria) | AnP - Análise e Monitoria da Paisagem (v1.1) | Preparação (alinhar/recortar/reprojetar), Relatório (composição multi-ano) e Monitoria (comparação entre dois anos e matriz de transição) |
+| `AnP_Fragmentacao_v1.1.zip` | [`anp_fragmentacao/`](anp_fragmentacao) | AnP - Fragmentação da Paisagem (v1.1) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
+
+Os plugins Preparação, Relatório e Monitoria, distribuídos separadamente até a versão 1.0, agora fazem parte de um único plugin com menu de seleção de módulo.
 
 ## Instalação
 
-No QGIS (3.16 ou superior): **Complementos → Gerenciar e instalar complementos → Instalar a partir do ZIP** e selecione o arquivo `.zip` do plugin.
+No QGIS (3.16 ou superior): **Complementos → Gerenciar e instalar complementos → Instalar a partir do ZIP** e selecione o arquivo `.zip` do plugin, baixado da página de [Releases](https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP/releases/latest).
 
 A análise temporal de fragmentação exige o pacote Python `pylandstats`. Os plugins não instalam pacotes automaticamente.
+
+### Atualização a partir de versões anteriores
+
+Na versão 1.1, a pasta do plugin **AnP - Análise e Monitoria da Paisagem** mudou de nome (`AnP_Analise_Monitoria_v1_0_1` → `anp_analise_monitoria`). Por isso, quem tem a versão anterior instalada (1.0.x) **deve desinstalá-la antes** de instalar a nova: em **Complementos → Gerenciar e instalar complementos → Instalados**, selecione o plugin e clique em **Desinstalar complemento**. Sem isso, o QGIS mantém as duas versões lado a lado, com o mesmo nome no menu.
+
+O plugin **AnP - Fragmentação da Paisagem** manteve o nome da pasta e pode ser atualizado diretamente.
 
 ## Como citar
 

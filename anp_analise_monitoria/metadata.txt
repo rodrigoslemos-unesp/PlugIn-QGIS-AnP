@@ -1,0 +1,17 @@
+[general]
+name=AnP - Analise e Monitoria da Paisagem
+qgisMinimumVersion=3.16
+description=Suite integrada para analise de cobertura e uso da terra a partir de rasters MapBiomas: Preparacao (alinhar/recortar/reprojetar), Relatorio (composicao multi-ano) e Monitoria (comparacao entre dois anos e matriz de transicao). Interface unica com selecao de modulo.
+version=1.1
+author=Prof. Dr. Rodrigo Silva Lemos
+email=rodrigo.s.lemos@unesp.br
+about=Plugin integrado da suite AnP — Analise da Paisagem (Grupo de Pesquisa Planejamento Ambiental e Dinamicas da Paisagem, DGPA/IGCE — Unesp Rio Claro). Reune os modulos de Preparacao, Relatorio e Monitoria numa unica interface com menu de selecao. Saidas de planilha padronizadas (motor proprio, sem dependencias externas), aba unica "Metadados e Como Citar". Nao instala pacotes automaticamente. Licenca GNU GPL-3.0 (ver arquivo LICENSE).
+tracker=https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+repository=https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+homepage=https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+category=Raster
+icon=icon.png
+experimental=True
+deprecated=False
+tags=mapbiomas,cobertura da terra,monitoria,transicao,paisagem,reprojecao,recorte
+changelog=1.1 (2026): versao unificada da suite AnP — todos os modulos, janelas, rodape do menu e planilhas passam a exibir v1.1 (constante VERSAO_SUITE). | 1.0.4 (2026): citacao padronizada do AnP com DOI Zenodo (10.5281/zenodo.21364767) na aba Como_Citar. | 1.0.3 (2026): limpeza para submissao ao repositorio oficial (sem mudanca de comportamento) — abrir pasta via QDesktopServices no lugar de subprocess; try/except com log em vez de silencioso; ajustes de estilo (variavel ambigua, import duplicado, lambda, bare except). | 1.0.2 (2026): inclusao do arquivo LICENSE (GNU GPL-3.0) no pacote, exigido para distribuicao/copia; referencia a licenca no campo about. | 1.0.1 (2026): correcao da classificacao natural/antropico na Monitoria — Aquicultura (31) passa a antropico; Praia/Duna/Areal (23) passa a natural; agregados N1 Floresta(1)/Veg.Herbacea(10)/Agua(26) incluidos como naturais (corrige o Nivel 1). | 1.0 (2026): integracao de Preparacao + Monitoria + Relatorio num unico plugin com launcher; codigo compartilhado (comum/) deduplicado; planilhas padronizadas no motor unico; aba unica "Metadados e Como Citar"; legenda MapBiomas canonica; sem pip automatico.

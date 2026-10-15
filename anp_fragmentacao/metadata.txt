@@ -1,0 +1,16 @@
+[general]
+name=AnP - Fragmentacao da Paisagem
+qgisMinimumVersion=3.16
+description=Fragmentacao de paisagens naturais a partir de rasters MapBiomas, em duas estruturas: (1) analise temporal (comparacao entre dois anos, metricas de classe e paisagem via PyLandStats) e (2) analise de fragmentos (vetorizacao patch-level com metricas por poligono). Interface unica com selecao de estrutura.
+version=1.1
+author=Prof. Dr. Rodrigo Silva Lemos
+email=rodrigo.s.lemos@unesp.br
+about=Plugin integrado da suite AnP — Analise da Paisagem (Grupo de Pesquisa Planejamento Ambiental e Dinamicas da Paisagem, DGPA/IGCE — Unesp Rio Claro). Reune a fragmentacao temporal (PyLandStats) e a analise de fragmentos (vetorizacao) num launcher unico. Saidas padronizadas: aba unica "Metadados e Como Citar", motor de planilha proprio (sem openpyxl). Checagem de dependencia contextual, sem instalar pacotes automaticamente.
+tracker=https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+repository=https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP
+category=Plugins
+icon=icon.png
+experimental=True
+deprecated=False
+tags=mapbiomas,fragmentacao,pylandstats,fragmentos,area nucleo,vetorizacao,paisagem
+changelog=1.1 (2026): versao unificada da suite AnP — todos os modulos, janelas, rodape do menu e planilhas passam a exibir v1.1 (constante VERSAO_SUITE). | 1.0.1 (2026): citacao padronizada do AnP com DOI Zenodo (10.5281/zenodo.21364767) na aba Como_Citar. | 1.0 (2026): integracao da fragmentacao temporal + analise de fragmentos (v0.2) num plugin unico com launcher; comum/ compartilhado (xlsx unico, legenda canonica, metadados); Metadados e Como_Citar padronizados; checagem de dependencia contextual (temporal exige PyLandStats, fragmentos so scipy); sem pip automatico.
