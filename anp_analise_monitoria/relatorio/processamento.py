@@ -155,7 +155,8 @@ def salvar_raster(arr, gt, proj, path, nd=0):
 
 def processar_relatorio(entradas, shapefile=None, campo_id=None,
                          pixel_m_manual=None, gerar_tif=True,
-                         pasta_tif=None, progresso_fn=None):
+                         pasta_tif=None, progresso_fn=None,
+                         nome_total=None):
     """
     Processa múltiplos rasters e retorna:
     {
@@ -164,6 +165,8 @@ def processar_relatorio(entradas, shapefile=None, campo_id=None,
       'Feição X': { ano: { ... } },
     }
     """
+    from ..comum.nomes import limpar_nome_total
+    nome_total = limpar_nome_total(nome_total)
     from osgeo import gdal, ogr
 
     def prog(msg):
@@ -192,14 +195,15 @@ def processar_relatorio(entradas, shapefile=None, campo_id=None,
 
         prog(f"  Shape completo...")
         dados_classe = contar_por_classe(arr_orig, info['nd'], px_ha)
-        if 'Shape Completo' not in resultado:
-            resultado['Shape Completo'] = {}
-        resultado['Shape Completo'][ano] = dados_classe
+        if nome_total not in resultado:
+            resultado[nome_total] = {}
+        resultado[nome_total][ano] = dados_classe
 
         if gerar_tif and pasta_tif:
             try:
                 from .qml_mapbiomas import gerar_qml_junto_tif
-                nome_tif = f"{ano}_ShapeCompleto.tif"
+                slug_total = "".join(c if c.isalnum() else "_" for c in nome_total)[:60]
+                nome_tif = f"{ano}_{slug_total}.tif"
                 path_tif = os.path.join(pasta_tif, nome_tif)
                 salvar_raster(arr_orig, info['gt'], info['proj'],
                               path_tif, nd=int(info['nd']) if info['nd'] else 0)
@@ -217,7 +221,7 @@ def processar_relatorio(entradas, shapefile=None, campo_id=None,
             n_feats = lyr.GetFeatureCount()
 
             for feat in lyr:
-                nome_feat = str(feat.GetField(campo_id))[:60]
+                nome_feat = str(feat.GetField(campo_id))
                 geom      = feat.GetGeometryRef()
                 if geom is None:
                     continue
@@ -234,7 +238,7 @@ def processar_relatorio(entradas, shapefile=None, campo_id=None,
                         try:
                             from .qml_mapbiomas import gerar_qml_junto_tif
                             slug = "".join(
-                                c if c.isalnum() else "_" for c in nome_feat)
+                                c if c.isalnum() else "_" for c in nome_feat)[:60]
                             nome_tif = f"{ano}_{slug}.tif"
                             path_tif = os.path.join(pasta_tif, nome_tif)
                             salvar_raster(sub, gt_sub, info['proj'],

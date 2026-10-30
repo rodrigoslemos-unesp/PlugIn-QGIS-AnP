@@ -11,6 +11,7 @@ from qgis.gui import QgsMapLayerComboBox, QgsFieldComboBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..comum.metadados import VERSAO_SUITE
+from ..comum.nomes import campo_nome_total, limpar_nome_total
 
 
 class _Worker(QThread):
@@ -35,6 +36,7 @@ class _Worker(QThread):
                 area_min_ha  = self._p['area_min'],
                 shapefile    = self._p.get('shapefile'),
                 campo        = self._p.get('campo'),
+                nome_total   = self._p.get('nome_total'),
                 progresso_fn = self.progresso.emit,
             )
             self.concluido.emit(res)
@@ -156,6 +158,8 @@ class AnPFragmentosDialog(QDialog):
         g.addWidget(self.cb_campo, 2, 1, 1, 2)
         self.cb_shp.layerChanged.connect(
             lambda lyr: self.cb_campo.setLayer(lyr))
+        # Nome da área total (usado quando não há desagregação)
+        self.le_nome_total = campo_nome_total(g, 3)
         return grp
 
     def _toggle_feic(self, on):
@@ -264,6 +268,7 @@ class AnPFragmentosDialog(QDialog):
             'conn'    : self.cb_conn.currentData(),
             'depth'   : self.sp_depth.value(),
             'area_min': area_min,
+            'nome_total': limpar_nome_total(self.le_nome_total.text()),
         }
         if self.chk_feic.isChecked():
             params['shapefile'] = self.cb_shp.currentLayer().source().split('|')[0]

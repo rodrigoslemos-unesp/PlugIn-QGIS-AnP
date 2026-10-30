@@ -344,7 +344,7 @@ def processar_completo(raster1, raster2, ano1, ano2,
                         mascara_path=None, campo_feicao=None,
                         pixel_m_manual=None,
                         classes_porte=None,
-                        progresso_fn=None):
+                        nome_total=None, progresso_fn=None):
     """
     Retorna dict:
     {
@@ -397,7 +397,10 @@ def processar_completo(raster1, raster2, ano1, ano2,
     arr1_n1 = agregar_n1(arr1)
     arr2_n1 = agregar_n1(arr2)
 
+    from ..comum.nomes import limpar_nome_total
+    nome_total = limpar_nome_total(nome_total)
     resultado = {'_meta': {
+        'nome_total': nome_total,
         'px_m': px_m, 'px_ha': px_ha, 'gt': gt, 'proj': proj,
         'nd': nd, 'arr1_n1': arr1_n1, 'arr2_n1': arr2_n1,
         'n_pixels': n_pixels_borda, 'dist_m': dist_m,
@@ -427,7 +430,7 @@ def processar_completo(raster1, raster2, ano1, ano2,
         return rec
 
     resultado['__shape_completo__'] = processar_rec(
-        arr1_n1, arr2_n1, 'Shape Completo')
+        arr1_n1, arr2_n1, nome_total)
 
     if mascara_path and campo_feicao:
         from osgeo import ogr

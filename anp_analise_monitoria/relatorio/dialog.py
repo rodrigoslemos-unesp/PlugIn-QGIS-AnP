@@ -13,6 +13,7 @@ from qgis.gui import QgsMapLayerComboBox, QgsFieldComboBox
 from qgis.core import QgsMapLayerProxyModel
 
 from ..comum.metadados import VERSAO_SUITE
+from ..comum.nomes import campo_nome_total, limpar_nome_total
 
 
 class _Worker(QThread):
@@ -31,6 +32,7 @@ class _Worker(QThread):
                 entradas        = self._p['entradas'],
                 shapefile       = self._p.get('shapefile'),
                 campo_id        = self._p.get('campo_id'),
+                nome_total      = self._p.get('nome_total'),
                 pixel_m_manual  = self._p.get('pixel_m'),
                 gerar_tif       = self._p.get('gerar_tif', True),
                 pasta_tif       = self._p['pasta'],
@@ -331,6 +333,8 @@ class AnPRelatorioDialog(QDialog):
         g.addWidget(QLabel("Campo identificador:"), 3, 0)
         self.cb_campo = QgsFieldComboBox(); self.cb_campo.setEnabled(False)
         g.addWidget(self.cb_campo, 3, 1, 1, 2)
+        # Nome da área total (sempre ativo — vale com ou sem desagregação)
+        self.le_nome_total = campo_nome_total(g, 4)
         g.setColumnStretch(1, 1)
         return grp
 
@@ -494,6 +498,7 @@ class AnPRelatorioDialog(QDialog):
             'entradas' : entradas,
             'shapefile': self._shp_ativo() if self.chk_feic.isChecked() else None,
             'campo_id' : self.cb_campo.currentField() if self.chk_feic.isChecked() else None,
+            'nome_total': limpar_nome_total(self.le_nome_total.text()),
             'pixel_m'  : self._pixel_m_ativo(),
             'pasta'    : self.le_saida.text().strip(),
             'nome_base': self.le_nome.text().strip() or "relatorio",

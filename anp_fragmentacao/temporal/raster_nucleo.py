@@ -142,8 +142,9 @@ def gerar_rasters_nucleo(resultado, pasta, ano1, ano2, grupos_ids=None, progress
     for rec, dados in resultado.items():
         if rec == '_meta' or not isinstance(dados, dict):
             continue
-        lbl  = ('SC' if rec == '__shape_completo__' else
-                "".join(c if c.isalnum() else "_" for c in str(rec))[:60])
+        nome_u = (resultado.get('_meta', {}).get('nome_total', 'SC')
+                  if rec == '__shape_completo__' else rec)
+        lbl  = "".join(c if c.isalnum() else "_" for c in str(nome_u))[:60]
 
         for ano, ano_k in [(ano1, str(ano1)), (ano2, str(ano2))]:
             arr_n1 = meta.get(f'arr{"1" if str(ano)==str(ano1) else "2"}_n1')

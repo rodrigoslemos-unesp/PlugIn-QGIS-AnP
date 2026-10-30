@@ -15,6 +15,7 @@ from qgis.core import QgsMapLayerProxyModel
 
 from ..comum.legenda import COLECOES
 from ..comum.metadados import VERSAO_SUITE
+from ..comum.nomes import campo_nome_total, limpar_nome_total
 
 
 class _Worker(QThread):
@@ -42,6 +43,7 @@ class _Worker(QThread):
                 nivel_legenda  = self._p.get('nivel', 4),
                 mascara_path = self._p.get('mascara_path'),
                 campo_feicao = self._p.get('campo_feicao'),
+                nome_total   = self._p.get('nome_total'),
                 progresso_fn = self.progresso.emit,
             )
 
@@ -264,6 +266,9 @@ class AnPMonitoriaDialog(QDialog):
             lambda lyr: self.cb_campo.setLayer(lyr)
             if self.chk_feicoes.isChecked() else None)
 
+        # Nome da área total (sempre ativo — vale com ou sem desagregação)
+        self.le_nome_total = campo_nome_total(g, 3)
+
         g.setColumnStretch(2, 1)
         return grp
 
@@ -459,6 +464,7 @@ class AnPMonitoriaDialog(QDialog):
             'colecao'     : self.cb_colecao.currentText(),
             'mascara_path': mask.source().split('|')[0] if use_f else None,
             'campo_feicao': self.cb_campo.currentField() if use_f else None,
+            'nome_total'  : limpar_nome_total(self.le_nome_total.text()),
             'nivel'       : self.cb_nivel.itemData(self.cb_nivel.currentIndex()) or 4,
             'modo'        : self._modo(),
             'pasta_saida' : self.le_pasta.text().strip(),

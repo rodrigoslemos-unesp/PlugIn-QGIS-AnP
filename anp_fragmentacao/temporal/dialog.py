@@ -11,6 +11,7 @@ from qgis.gui import QgsMapLayerComboBox, QgsFieldComboBox
 from qgis.core import QgsMapLayerProxyModel
 from ..comum.legenda import COLECOES, info_borda
 from ..comum.metadados import VERSAO_SUITE
+from ..comum.nomes import campo_nome_total, limpar_nome_total
 
 
 class _Worker(QThread):
@@ -36,6 +37,7 @@ class _Worker(QThread):
                 grupos_ids     = self._p.get('grupos_ids'),
                 mascara_path = self._p.get('mascara_path'),
                 campo_feicao = self._p.get('campo_feicao'),
+                nome_total   = self._p.get('nome_total'),
                 pixel_m_manual = self._p.get('pixel_m_manual'),
                 classes_porte  = self._p.get('classes_porte'),
                 progresso_fn = self.progresso.emit,
@@ -361,6 +363,8 @@ class AnPFragmentacaoDialog(QDialog):
         self.cb_mask.layerChanged.connect(
             lambda lyr: self.cb_campo.setLayer(lyr)
             if self.chk_f.isChecked() else None)
+        # Nome da área total (sempre ativo — vale com ou sem desagregação)
+        self.le_nome_total = campo_nome_total(g, 3)
         g.setColumnStretch(2, 1); return grp
 
     def _toggle_f(self, on):
@@ -467,6 +471,7 @@ class AnPFragmentacaoDialog(QDialog):
                              if chk.isChecked()],
             'mascara_path': mask.source().split('|')[0] if use_f else None,
             'campo_feicao': self.cb_campo.currentField() if use_f else None,
+            'nome_total'  : limpar_nome_total(self.le_nome_total.text()),
             'pasta'       : self.le_pasta.text().strip(),
             'gerar_porte' : self.chk_porte.isChecked(),
             'classes_porte': classes_porte,

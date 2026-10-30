@@ -181,7 +181,7 @@ def processar_fragmentos(raster, valores, pasta_saida, nome_base,
                          modo_agregar=False, conn=8, depth_px=1,
                          area_min_ha=0.0,
                          shapefile=None, campo=None,
-                         progresso_fn=None):
+                         progresso_fn=None, nome_total=None):
     """
     Retorna dict com: 'shapefile', 'excel', 'registros', 'meta'.
     Levanta ValueError se o raster não estiver em CRS projetado.
@@ -244,7 +244,8 @@ def processar_fragmentos(raster, valores, pasta_saida, nome_base,
         if not unidades:
             raise ValueError("Nenhuma feição sobrepôs o raster.")
     else:
-        unidades.append(("Shape Completo", arr, gt, None))
+        from ..comum.nomes import limpar_nome_total
+        unidades.append((limpar_nome_total(nome_total), arr, gt, None))
 
     os.makedirs(pasta_saida, exist_ok=True)
     por_unidade = bool(shapefile and campo)

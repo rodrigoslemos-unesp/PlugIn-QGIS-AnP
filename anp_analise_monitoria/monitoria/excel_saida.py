@@ -113,7 +113,7 @@ def _col_area_label(modo):
     return None
 
 
-def _aba_cobertura(wb, dados, ano1, ano2, modo):
+def _aba_cobertura(wb, dados, ano1, ano2, modo, nome_total='Shape Completo'):
     """
     Aba Cobertura — tidy.
     Colunas variam conforme modo (ha | km2 | pct | ha_km2_pct).
@@ -142,7 +142,7 @@ def _aba_cobertura(wb, dados, ano1, ano2, modo):
         # Pular apenas entradas que não são dicts de recorte válidos
         if not isinstance(d, dict) or 'tab_cob' not in d:
             continue
-        lbl  = 'Shape Completo' if nome_unidade == '__shape_completo__' \
+        lbl  = nome_total if nome_unidade == '__shape_completo__' \
                else nome_unidade
         tab  = d.get('tab_cob', [])
         tot1 = sum(ln['ha1'] for ln in tab) or 1
@@ -176,7 +176,7 @@ def _aba_cobertura(wb, dados, ano1, ano2, modo):
 
 
 
-def _aba_alteracoes(wb, dados, ano1, ano2, modo):
+def _aba_alteracoes(wb, dados, ano1, ano2, modo, nome_total='Shape Completo'):
     """
     Aba Alteracoes — tidy.
     Cada linha recebe a cor de fundo da categoria de mudança.
@@ -206,7 +206,7 @@ def _aba_alteracoes(wb, dados, ano1, ano2, modo):
     for nome_unidade, d in dados.items():
         if not isinstance(d, dict) or 'tab_trans' not in d:
             continue
-        lbl  = 'Shape Completo' if nome_unidade == '__shape_completo__' \
+        lbl  = nome_total if nome_unidade == '__shape_completo__' \
                else nome_unidade
         tab  = d.get('tab_trans', [])
         tot  = sum(ln['area_ha'] for ln in tab) or 1
@@ -400,8 +400,9 @@ def exportar(resultado, pasta, ano1, ano2, modo='ha',
     wb1 = XlsxBook()
     escrever_metadados(wb1, "Monitoria de Cobertura da Terra",
                        params=_params_moni(resultado, ano1, ano2, modo))
-    _aba_cobertura(wb1, dados_ord, ano1, ano2, modo)
-    _aba_alteracoes(wb1, dados_ord, ano1, ano2, modo)
+    nome_total = resultado.get('_nome_total', 'Shape Completo')
+    _aba_cobertura(wb1, dados_ord, ano1, ano2, modo, nome_total)
+    _aba_alteracoes(wb1, dados_ord, ano1, ano2, modo, nome_total)
     p1  = os.path.join(pasta, f"{ano1}_{ano2}_monitoria.xlsx")
     wb1.save(p1)
     prog(f"  ✓ {os.path.basename(p1)}")
@@ -414,7 +415,7 @@ def exportar(resultado, pasta, ano1, ano2, modo='ha',
     for nome, d in dados_ord.items():
         if not isinstance(d, dict):
             continue
-        lbl   = 'Shape Completo' if nome == '__shape_completo__' else nome
+        lbl   = nome_total if nome == '__shape_completo__' else nome
         tab_t = d.get('tab_trans', [])
         if tab_t:
             _aba_matriz(wb2, lbl, tab_t, ano1, ano2, modo)

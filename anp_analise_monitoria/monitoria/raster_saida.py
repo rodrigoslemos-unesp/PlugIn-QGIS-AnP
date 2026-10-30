@@ -91,7 +91,8 @@ def exportar_rasters(resultado, pasta, ano1, ano2,
                if isinstance(v, dict) and '_arr1' in v}
 
     for nome, dados in unidades.items():
-        lbl  = 'ShapeCompleto' if nome == '__shape_completo__' else nome
+        lbl  = (resultado.get('_nome_total', 'ShapeCompleto')
+                if nome == '__shape_completo__' else nome)
         slug = "".join(c if c.isalnum() else "_" for c in lbl)[:60]
         a1   = dados['_arr1']; a2 = dados['_arr2']
         gt_u = dados.get('_gt') or meta.get('gt')

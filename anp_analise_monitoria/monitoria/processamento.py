@@ -341,7 +341,7 @@ def processar_completo(raster1, raster2, ano1, ano2,
                         colecao_nome,
                         nivel_legenda=4,
                         mascara_path=None, campo_feicao=None,
-                        progresso_fn=None):
+                        nome_total=None, progresso_fn=None):
     """
     Fluxo principal:
       1. Abre e alinha automaticamente as grades dos dois rasters
@@ -371,7 +371,9 @@ def processar_completo(raster1, raster2, ano1, ano2,
     arr1 = agregar_nivel(arr1, nivel_legenda)
     arr2 = agregar_nivel(arr2, nivel_legenda)
 
+    from ..comum.nomes import limpar_nome_total
     resultado = {
+        '_nome_total'   : limpar_nome_total(nome_total),
         'avisos'        : avisos,
         '_px_ha'        : px_ha,
         '_is_projected' : crs_info['is_projected'],
@@ -395,7 +397,7 @@ def processar_completo(raster1, raster2, ano1, ano2,
         }
 
     resultado['__shape_completo__'] = processar_rec(arr1, arr2,
-                                                     'Shape Completo')
+                                                     resultado['_nome_total'])
 
     if mascara_path and campo_feicao:
         from osgeo import ogr

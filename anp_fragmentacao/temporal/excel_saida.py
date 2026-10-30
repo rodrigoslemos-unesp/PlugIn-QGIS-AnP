@@ -64,7 +64,8 @@ def _aba_metricas(wb, resultado, ano1, ano2):
     for rec, dados in resultado.items():
         if not isinstance(dados, dict) or 'grupos' not in dados.get(str(ano1), dados.get(str(ano2), {})):
             continue
-        lbl = 'Shape Completo' if rec == '__shape_completo__' else rec
+        lbl = (resultado.get('_meta', {}).get('nome_total', 'Shape Completo')
+               if rec == '__shape_completo__' else rec)
         for ano_k in [str(ano1), str(ano2)]:
             ano_d = dados.get(ano_k, {})
             grupos = ano_d.get('grupos', {})
@@ -103,7 +104,8 @@ def _aba_paisagem(wb, resultado, ano1, ano2):
     for rec, dados in resultado.items():
         if not isinstance(dados, dict) or 'grupos' not in dados.get(str(ano1), dados.get(str(ano2), {})):
             continue
-        lbl = 'Shape Completo' if rec == '__shape_completo__' else rec
+        lbl = (resultado.get('_meta', {}).get('nome_total', 'Shape Completo')
+               if rec == '__shape_completo__' else rec)
         for ano_k in [str(ano1), str(ano2)]:
             pai = dados.get(ano_k, {}).get('paisagem', {})
             for sigla, v in pai.items():
@@ -134,7 +136,8 @@ def _aba_variacoes(wb, resultado, ano1, ano2):
     for rec, dados in resultado.items():
         if not isinstance(dados, dict) or 'grupos' not in dados.get(str(ano1), dados.get(str(ano2), {})):
             continue
-        lbl = 'Shape Completo' if rec == '__shape_completo__' else rec
+        lbl = (resultado.get('_meta', {}).get('nome_total', 'Shape Completo')
+               if rec == '__shape_completo__' else rec)
         g1 = dados.get(str(ano1), {}).get('grupos', {})
         g2 = dados.get(str(ano2), {}).get('grupos', {})
         todos_grupos = set(g1) | set(g2)
@@ -193,7 +196,8 @@ def _aba_distribuicao(wb, resultado, ano1, ano2, chave, nome_aba):
     for rec, dados in resultado.items():
         if rec == '_meta' or not isinstance(dados, dict):
             continue
-        lbl = 'Shape Completo' if rec == '__shape_completo__' else rec
+        lbl = (resultado.get('_meta', {}).get('nome_total', 'Shape Completo')
+               if rec == '__shape_completo__' else rec)
         for ano_k in [str(ano1), str(ano2)]:
             dist_ano = dados.get(ano_k, {}).get('distribuicao', {})
             for nome_g, d in dist_ano.items():

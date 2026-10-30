@@ -2,9 +2,23 @@
 #  AnP — Análise da Paisagem
 #  Visualizações integradas: Cobertura · Matriz · Fragmentação
 #  Rodrigo Lemos — DGPA / UNESP Rio Claro
-#  Versão 1.1 (2025)
+#  Versão 1.2 (2025)
 #
-#  Versão inicial publicada, compatível com os plugins AnP v1.1.
+#  Compatível com os plugins AnP v1.1 (e com planilhas de versões
+#  anteriores dos módulos).
+#
+#  Novidades da 1.2:
+#   - Perfil ABNT: figuras desenhadas no tamanho final da página.
+#   - Sínteses entre unidades de análise (família 5): S1 matriz de
+#     bolhas da variação líquida; S2 variação líquida por classe,
+#     comparando unidades; S3 permanência da área de origem; S4
+#     combinação de S1 e S3.
+#   - H passa a ser só a variação líquida por unidade; o Sankey da
+#     unidade fica no E2 (juntos, não ficavam legíveis).
+#   - Correções: classes de tamanho configuráveis (F2/F2b), planilhas
+#     de fragmentação antigas, nomes de unidades cortados por versões
+#     anteriores, rótulos em p.p., Sankey com rótulos externos.
+#
 #  Recursos:
 #   - Menu interativo: escolha quais famílias de gráficos gerar
 #     (Cobertura/Alterações, Matriz, Fragmentação/Paisagem,
@@ -14,6 +28,12 @@
 #     automaticamente.
 #   - Pergunta o formato de saída (PNG / SVG / ambos) e onde salvar
 #     os gráficos; cada janela de seleção abre na última pasta usada.
+#   - Perfil das figuras: ABNT (padrão) — 16 cm de largura (A4, NBR
+#     14724), 300 dpi, fontes de no mínimo 7 pt impressas, título na
+#     imagem (TITULO_NA_FIGURA_ABNT) e subtítulo/fonte fora dela; gera
+#     legendas_figuras_ABNT.txt com título, nota e fonte sugeridos para
+#     cada figura. Ou Tela — figuras amplas, com título, subtítulo e
+#     fonte na imagem.
 #   - Paleta de cores MapBiomas Coleção 10 (a mesma dos QML gerados
 #     pelo plugin AnP), com contraste automático de rótulos
 #     (.cor_texto_contraste) sobre fundos claros/escuros.
@@ -102,7 +122,7 @@ sel_pasta <- function(caption, pasta_sugerida = NULL) {
 # ============================================================
 
 message("\n", strrep("=", 62))
-message("  AnP v1.1 — Selecao das familias de graficos")
+message("  AnP v1.2 — Selecao das familias de graficos")
 message(strrep("=", 62))
 message("\n  [1] Cobertura e Alteracoes  (C2, C2A, C4, C4A)")
 message("      -> requer o arquivo de MONITORIA (Modulo II)")
@@ -114,6 +134,7 @@ message("\n  [4] Composicao de Cobertura  (P1 - graficos de rosca/pizza)")
 message("      -> requer o arquivo de RELATORIO DE COBERTURA (Modulo III)")
 message("\n  [5] Analises Multivariadas e Fluxos  (PCA, Heatmap, Dispersao, Sankey, Chord)")
 message("      -> requer familia [1] Cobertura (usa os mesmos dados)")
+message("      -> inclui as sinteses entre unidades (S1 a S4)")
 message(strrep("-", 62))
 message("\n  Digite os numeros desejados separados por virgula.")
 message("  Exemplos: '1,3'  ou  '1,5'  ou Enter para todos\n")
@@ -159,6 +180,20 @@ FORMATO_SAIDA <- switch(trimws(.entrada_formato),
                         c("png", "svg")   # "3", vazio ou qualquer outra entrada -> ambos
 )
 message("  Formato selecionado: ", paste(toupper(FORMATO_SAIDA), collapse = " + "))
+message("")
+
+# ── Perfil das figuras ──────────────────────────────────────────────────
+message(strrep("-", 62))
+message("  Perfil das figuras:")
+message("    [1] Relatorio / artigo (ABNT)  (padrao)")
+message("        16 cm de largura, 300 dpi, fontes legiveis impressas;")
+message("        sem titulo e fonte na imagem (vao na legenda do documento)")
+message("    [2] Tela / apresentacao")
+message("        figuras amplas, com titulo, subtitulo e fonte na imagem")
+message("")
+.entrada_perfil <- .ler_opcao("  Perfil [1/2]: ", "1")
+PERFIL <- if (trimws(.entrada_perfil) == "2") "tela" else "abnt"
+message("  Perfil selecionado: ", if (PERFIL == "abnt") "ABNT (relatorio/artigo)" else "Tela")
 message("")
 
 # ============================================================
@@ -266,7 +301,9 @@ message("\nPasta de saida: ", pasta_saida)
       if (!is.na(col3)) nomes <- c(nomes, unique(df3[[col3]]))
     }, error = function(e) NULL)
   }
-  nomes <- nomes[!is.na(nomes) & nchar(as.character(nomes)) < 80]
+  # descarta linhas de rodapé de versões antigas ("AMP v3.0 — ... | ...")
+  nomes <- nomes[!is.na(nomes) & nchar(as.character(nomes)) < 200 &
+                   !grepl("|", as.character(nomes), fixed = TRUE)]
   unique(as.character(nomes))
 }
 
@@ -276,7 +313,18 @@ message("\nPasta de saida: ", pasta_saida)
 # detectados nos gráficos integrados (C2A, C4A, F1).
 
 .nomes_reais   <- .detectar_nomes_reais(arq_cob, arq_frag, arq_rel)
-NOMES_PADRAO   <- setNames(.nomes_reais, .nomes_reais)
+# Planilhas de versões anteriores cortavam os nomes das unidades (40 ou 60
+# caracteres). Um nome cortado (>= 30 caracteres) que seja o início de
+# outro nome conhecido é mapeado para o nome completo — a mesma unidade
+# não aparece duplicada, com cores diferentes, entre os gráficos.
+.nome_completo <- function(nm) {
+  if (nchar(nm) < 30) return(nm)
+  .n   <- function(x) tolower(stringi::stri_trans_general(trimws(x), "Latin-ASCII"))
+  cand <- .nomes_reais[startsWith(.n(.nomes_reais), .n(nm))]
+  cand[which.max(nchar(cand))]
+}
+NOMES_PADRAO   <- setNames(vapply(.nomes_reais, .nome_completo, ""), .nomes_reais)
+.nomes_reais   <- unique(unname(NOMES_PADRAO))
 if (length(.nomes_reais) > 0) {
   message("\nRecortes/unidades detectados nas planilhas:")
   for (nm in .nomes_reais) message("    - ", nm)
@@ -437,37 +485,37 @@ MB_COD_N2 <- c(
 )
 
 MB_N2_NOME <- c(
-  "1"="Floresta","3"="Formacao Florestal","4"="Formacao Savanica",
-  "5"="Mangue","6"="Floresta Alagavel","49"="Restinga Arborea",
-  "10"="Veg. Herbacea e Arbustiva","11"="Campo Alagado e Area Pantanosa",
-  "12"="Formacao Campestre","29"="Afloramento Rochoso","32"="Apicum",
-  "50"="Restinga Herbacea","13"="Outra Formacao nao Florestal",
-  "14"="Agropecuaria","15"="Pastagem","9"="Silvicultura",
+  "1"="Floresta","3"="Formação Florestal","4"="Formação Savânica",
+  "5"="Mangue","6"="Floresta Alagável","49"="Restinga Arbórea",
+  "10"="Veg. Herbácea e Arbustiva","11"="Campo Alagado e Área Pantanosa",
+  "12"="Formação Campestre","29"="Afloramento Rochoso","32"="Apicum",
+  "50"="Restinga Herbácea","13"="Outra Formação não Florestal",
+  "14"="Agropecuária","15"="Pastagem","9"="Silvicultura",
   "21"="Mosaico de Usos","18"="Agricultura",
-  "22"="Area nao Vegetada","23"="Praia, Duna e Areal","24"="Area Urbanizada",
-  "25"="Outras Areas nao Vegetadas","30"="Mineracao","75"="Usina Fotovoltaica",
-  "26"="Corpo D'agua","33"="Rio, Lago e Oceano","31"="Aquicultura",
-  "27"="Nao Observado"
+  "22"="Área não Vegetada","23"="Praia, Duna e Areal","24"="Área Urbanizada",
+  "25"="Outras Áreas não Vegetadas","30"="Mineração","75"="Usina Fotovoltaica",
+  "26"="Corpo D'água","33"="Rio, Lago e Oceano","31"="Aquicultura",
+  "27"="Não Observado"
 )
 
 # Legenda completa (codigo -> nome, em todos os niveis) — usada para,
 # na Matriz (que so traz NOMES de classe), voltar do nome ao codigo e
 # entao ao Nivel 2.
 .MB_LEGENDA <- c(
-  "1"="Floresta","3"="Formacao Florestal","4"="Formacao Savanica","5"="Mangue",
-  "6"="Floresta Alagavel","49"="Restinga Arborea",
-  "10"="Vegetacao Herbacea e Arbustiva","11"="Campo Alagado e Area Pantanosa",
-  "12"="Formacao Campestre","29"="Afloramento Rochoso","32"="Apicum",
-  "50"="Restinga Herbacea","13"="Outra Formacao nao Florestal",
-  "14"="Agropecuaria","15"="Pastagem","9"="Silvicultura","21"="Mosaico de Usos",
-  "18"="Agricultura","19"="Lavoura Temporaria","36"="Lavoura Perene",
-  "39"="Soja","20"="Cana-de-acucar","40"="Arroz","62"="Algodao",
-  "41"="Outras Lavouras Temporarias","46"="Cafe","47"="Citrus","35"="Dende",
+  "1"="Floresta","3"="Formação Florestal","4"="Formação Savânica","5"="Mangue",
+  "6"="Floresta Alagável","49"="Restinga Arbórea",
+  "10"="Vegetação Herbácea e Arbustiva","11"="Campo Alagado e Área Pantanosa",
+  "12"="Formação Campestre","29"="Afloramento Rochoso","32"="Apicum",
+  "50"="Restinga Herbácea","13"="Outra Formação não Florestal",
+  "14"="Agropecuária","15"="Pastagem","9"="Silvicultura","21"="Mosaico de Usos",
+  "18"="Agricultura","19"="Lavoura Temporária","36"="Lavoura Perene",
+  "39"="Soja","20"="Cana-de-açúcar","40"="Arroz","62"="Algodão",
+  "41"="Outras Lavouras Temporárias","46"="Café","47"="Citrus","35"="Dendê",
   "48"="Outras Lavouras Perenes",
-  "22"="Area nao Vegetada","23"="Praia, Duna e Areal","24"="Area Urbanizada",
-  "25"="Outras Areas nao Vegetadas","30"="Mineracao","75"="Usina Fotovoltaica",
-  "26"="Corpo D'agua","33"="Rio, Lago e Oceano","31"="Aquicultura",
-  "27"="Nao Observado"
+  "22"="Área não Vegetada","23"="Praia, Duna e Areal","24"="Área Urbanizada",
+  "25"="Outras Áreas não Vegetadas","30"="Mineração","75"="Usina Fotovoltaica",
+  "26"="Corpo D'água","33"="Rio, Lago e Oceano","31"="Aquicultura",
+  "27"="Não Observado"
 )
 .NOME_NORM_PARA_COD  <- setNames(names(.MB_LEGENDA), .norm(unname(.MB_LEGENDA)))
 .N2NOME_NORM_PARA_COD <- setNames(names(MB_N2_NOME), .norm(unname(MB_N2_NOME)))
@@ -524,8 +572,8 @@ MB_COD_N1 <- c(
   "27"="27","255"="27"
 )
 MB_N1_NOME <- c(
-  "1"="Floresta","10"="Veg. Herbacea e Arbustiva","14"="Agropecuaria",
-  "22"="Area nao Vegetada","26"="Corpo D'agua","27"="Nao Observado"
+  "1"="Floresta","10"="Veg. Herbácea e Arbustiva","14"="Agropecuária",
+  "22"="Área não Vegetada","26"="Corpo D'água","27"="Não Observado"
 )
 .N1NOME_NORM_PARA_COD <- setNames(names(MB_N1_NOME), .norm(unname(MB_N1_NOME)))
 .cod_para_n1nome <- function(cod) {
@@ -539,11 +587,25 @@ MB_N1_NOME <- c(
   ifelse(is.na(cor), "#888888", cor)
 }
 
+# Classes pequenas para agrupar em "Outros usos" num par origem × destino:
+# só as que ficam abaixo de limiar_pct (% da área total) NOS DOIS ANOS —
+# como origem (ANO_INI) e como destino (ANO_FIM). Uma classe que cresceu
+# (ex.: silvicultura de 0,7% para 2,3%) não é escondida.
+.classes_pequenas <- function(df, limiar_pct, o = "orig_n2", d = "dest_n2", v = "area_ha") {
+  tot <- sum(df[[v]], na.rm = TRUE)
+  if (tot <= 0) return(character(0))
+  so <- tapply(df[[v]], df[[o]], sum, na.rm = TRUE)
+  sd <- tapply(df[[v]], df[[d]], sum, na.rm = TRUE)
+  cl <- union(names(so), names(sd))
+  mx <- pmax(coalesce(as.numeric(so[cl]), 0), coalesce(as.numeric(sd[cl]), 0)) / tot * 100
+  setdiff(cl[mx < limiar_pct], "Outros usos")
+}
+
 # Agrupa classes < limiar (fracao do total) numa unica classe "outros"
 # na matriz de transicao. So vira "outros" se for pequena tanto como
 # origem quanto como destino (nao perde classes em expansao).
 .agrupa_pequenas_matriz <- function(df, limiar = 0.01,
-                                    rotulo = "Soma de outros valores inferiores a 1%") {
+                                    rotulo = ROTULO_OUTROS_1PC) {
   Tot <- sum(df$valor, na.rm = TRUE)
   if (Tot <= 0) return(df)
   to <- df %>% group_by(classe_origem) %>%
@@ -574,16 +636,51 @@ COR_2024 <- "#9FE1CB"
 # ============================================================
 #  6. TEMA BASE E EXPORTACAO
 # ============================================================
-FONTE_BASE <- 12
+# ── Perfil ABNT: figuras no tamanho final da página ──────────────────────
+# O ggplot mede fontes em pontos ABSOLUTOS. Uma figura salva com 35 cm de
+# largura e reduzida a 16 cm no documento encolhe todas as fontes na mesma
+# proporção (12 pt viram ~5 pt). No perfil ABNT cada figura já é DESENHADA
+# com a largura útil de uma página A4 (NBR 14724: margens de 3 cm e 2 cm
+# -> 16 cm), e as fontes são calibradas para esse tamanho, com um mínimo
+# legível. Insira a imagem no documento a 100% (16 cm), sem redimensionar.
+ABNT <- PERFIL == "abnt"
+LARGURA_ABNT_CM    <- 16    # largura útil da página A4 (ABNT)
+ALTURA_MAX_ABNT_CM <- 22    # deixa espaço para o título e a fonte da figura
+DPI_ABNT           <- 300
+FONTE_MIN_PT       <- 7     # menor corpo de texto aceito no tamanho impresso
+ESCALA_TEXTO       <- 0.78  # fator sobre os tamanhos do perfil de tela
+
+FONTE_BASE <- if (ABNT) 9 else 12
+
+# Tamanhos de texto e símbolos que acompanham o perfil:
+#   .pt() — texto de tema (element_text), em pontos
+#   .mm() — texto dentro do gráfico (geom_text/geom_label), em mm
+#   .sz() — símbolos (pontos, bolhas), sem mínimo
+.pt <- function(x) if (ABNT) max(x * ESCALA_TEXTO, FONTE_MIN_PT) else x
+.mm <- function(x) if (ABNT) max(x * ESCALA_TEXTO, FONTE_MIN_PT / ggplot2::.pt) else x
+.sz <- function(x) if (ABNT) x * 0.7 else x
+.tit <- function(x) if (ABNT) 10.5 else x   # títulos: 10,5 pt no perfil ABNT
 
 # ── Ajustes de texto: nomes longos de recortes/unidades ──────────────────
 # Os nomes das unidades nunca são cortados — textos longos são QUEBRADOS
 # em várias linhas. Ajuste as larguras abaixo (em número de caracteres
 # por linha) se algum título ainda ficar apertado ou largo demais.
-LARGURA_TITULO  <- 70   # título principal de cada gráfico
-LARGURA_FACET   <- 45   # título de cada painel nas grades (C2A, C4A...)
-LARGURA_LEGENDA <- 40   # itens de legenda com nome de unidade (F1, PCA...)
-LARGURA_EIXO    <- 30   # nomes de unidade usados como rótulo de eixo
+LARGURA_TITULO  <- 70                    # título principal de cada gráfico
+LARGURA_FACET   <- if (ABNT) 38 else 45  # título de cada painel nas grades (C2A, C4A...)
+LARGURA_LEGENDA <- if (ABNT) 34 else 40  # itens de legenda com nome de unidade (F1, PCA...)
+LARGURA_EIXO    <- if (ABNT) 24 else 30  # nomes de unidade usados como rótulo de eixo
+
+# Rótulo das classes somadas por serem menores que 1% (matriz e roscas).
+# No perfil ABNT, versão curta — a longa colide com os vizinhos em 16 cm.
+ROTULO_OUTROS_1PC <- if (ABNT) "Outras classes (< 1%)" else "Soma de outros valores inferiores a 1%"
+
+# Identificador curto de unidade sem numeral romano: iniciais das
+# palavras significativas (ex.: "Shape Completo" -> "SC").
+.iniciais <- function(x) {
+  p <- strsplit(gsub("[_-]", " ", x), "\\s+")[[1]]
+  p <- p[nchar(p) > 2 | grepl("^[A-Z0-9]", p)]
+  toupper(paste0(substr(head(p, 3), 1, 1), collapse = ""))
+}
 
 .quebrar <- function(x, largura = LARGURA_TITULO) {
   stringr::str_wrap(x, width = largura)
@@ -592,8 +689,9 @@ rotulo_facet <- ggplot2::label_wrap_gen(width = LARGURA_FACET)
 
 tema_amp <- theme_minimal(base_size = FONTE_BASE) +
   theme(
-    plot.title         = element_text(face="bold", size=FONTE_BASE+3, hjust=0, margin=margin(b=4),
-                                      lineheight=1.05),
+    plot.title         = element_text(face="bold", size=if (ABNT) 10.5 else FONTE_BASE+3,
+                                      hjust=0, margin=margin(b=6), lineheight=1.05),
+    plot.title.position = "plot",
     plot.subtitle      = element_text(color="grey45", size=FONTE_BASE-1, hjust=0, margin=margin(b=8)),
     plot.caption       = element_text(color="grey55", size=FONTE_BASE-3, hjust=1, margin=margin(t=6)),
     axis.text          = element_text(size=FONTE_BASE-1),
@@ -602,16 +700,63 @@ tema_amp <- theme_minimal(base_size = FONTE_BASE) +
     panel.grid.minor   = element_blank(),
     legend.position    = "top",
     legend.title       = element_blank(),
-    legend.text        = element_text(size=FONTE_BASE-2),
-    plot.margin        = margin(12,16,8,12),
+    legend.text        = element_text(size=.pt(FONTE_BASE-2)),
+    plot.margin        = if (ABNT) margin(4,6,4,4) else margin(12,16,8,12),
     strip.text         = element_text(face="bold", size=FONTE_BASE, lineheight=1.0)
   )
 
 CAPTION_PADRAO <- paste0(
-  "Fonte: MapBiomas Brasil, Colecao 10  |  AnP v1.1 (2025)"
+  "Fonte: MapBiomas Brasil, Coleção 10  |  AnP v1.2 (2025)"
 )
 
-salvar_grafico <- function(nome, plot, w=12, h=7, dpi=180) {
+# Linha "Fonte:" sugerida para as legendas ABNT (arquivo de legendas).
+# Ajuste a forma de autoria ("autores", "autor", nome) conforme o trabalho.
+FONTE_FIGURA_ABNT <- paste0(
+  "Fonte: elaborado pelos autores com o AnP v1.2 (LEMOS, 2025), a partir de ",
+  "dados do MapBiomas Coleção 10 (MAPBIOMAS, 2025)."
+)
+
+# No perfil ABNT, subtítulo e fonte saem da imagem e vão para o arquivo
+# legendas_figuras_ABNT.txt (a fonte fica abaixo da figura, no próprio
+# documento). O TÍTULO permanece na imagem por padrão — identifica a
+# figura com segurança e pode ser cortado depois no editor de texto.
+TITULO_NA_FIGURA_ABNT <- TRUE
+LEGENDAS_ABNT <- list()
+
+# manter_caption = TRUE: a nota (caption) permanece na imagem — usada quando
+# ela é indispensável à leitura (ex.: chave das siglas das unidades).
+.sem_titulos <- function(plot, nome, manter_caption = FALSE) {
+  if (inherits(plot, "patchwork")) {
+    ann <- plot$patches$annotation
+    titulo <- ann$title; sub <- ann$subtitle
+    plot <- plot + plot_annotation(title = if (TITULO_NA_FIGURA_ABNT) titulo else NULL,
+                                   subtitle = NULL,
+                                   caption = if (manter_caption) ann$caption else NULL)
+  } else {
+    lb <- ggplot2::get_labs(plot)
+    titulo <- lb$title; sub <- lb$subtitle
+    plot <- plot + labs(subtitle = NULL)
+    if (!TITULO_NA_FIGURA_ABNT) plot <- plot + labs(title = NULL)
+    if (!manter_caption)        plot <- plot + labs(caption = NULL)
+  }
+  .limpa <- function(x) if (is.null(x)) "" else gsub("\\s*\n\\s*", " ", as.character(x))
+  LEGENDAS_ABNT[[nome]] <<- list(titulo = .limpa(titulo), nota = .limpa(sub))
+  plot
+}
+
+# w, h: tamanho no perfil de tela (polegadas).
+# h_abnt: altura no perfil ABNT (cm); se omitida, segue a proporção de
+# tela, limitada a ALTURA_MAX_ABNT_CM. A largura ABNT é sempre 16 cm.
+salvar_grafico <- function(nome, plot, w=12, h=7, dpi=180, h_abnt=NULL,
+                           manter_caption=FALSE) {
+  if (ABNT) {
+    plot <- .sem_titulos(plot, nome, manter_caption)
+    if (is.null(h_abnt)) h_abnt <- h / w * LARGURA_ABNT_CM * 1.1
+    # espaço para o título (até 2 linhas) quando ele fica na imagem
+    if (TITULO_NA_FIGURA_ABNT) h_abnt <- h_abnt + 1.3
+    h_abnt <- min(max(h_abnt, 6), ALTURA_MAX_ABNT_CM)
+    w <- LARGURA_ABNT_CM / 2.54; h <- h_abnt / 2.54; dpi <- DPI_ABNT
+  }
   base <- file.path(pasta_saida, nome)
   gerados <- c()
   if ("png" %in% FORMATO_SAIDA) {
@@ -623,8 +768,30 @@ salvar_grafico <- function(nome, plot, w=12, h=7, dpi=180) {
     print(plot); dev.off()
     gerados <- c(gerados, ".svg")
   }
-  message("  Salvo: ", nome, " (", paste(gerados, collapse=" | "), ")")
+  message("  Salvo: ", nome, " (", paste(gerados, collapse=" | "), ")",
+          if (ABNT) sprintf("  [%.0f x %.1f cm]", w * 2.54, h * 2.54) else "")
   invisible(plot)
+}
+
+# Arquivo com as legendas sugeridas (título + nota + fonte), uma por
+# figura, para colar no documento no padrão ABNT.
+.escrever_legendas_abnt <- function() {
+  if (!ABNT || length(LEGENDAS_ABNT) == 0) return(invisible(NULL))
+  arq <- file.path(pasta_saida, "legendas_figuras_ABNT.txt")
+  linhas <- c(
+    "LEGENDAS SUGERIDAS PARA AS FIGURAS (padrão ABNT)",
+    "Insira cada imagem a 100% (16 cm de largura), sem redimensionar.",
+    "Título acima da figura (\"Figura N – ...\"); fonte abaixo.",
+    "")
+  for (nm in names(LEGENDAS_ABNT)) {
+    lg <- LEGENDAS_ABNT[[nm]]
+    linhas <- c(linhas, strrep("-", 70), paste0("Arquivo: ", nm),
+                paste0("Figura N – ", lg$titulo, "."))
+    if (nzchar(lg$nota)) linhas <- c(linhas, paste0("Nota: ", lg$nota, "."))
+    linhas <- c(linhas, FONTE_FIGURA_ABNT, "")
+  }
+  writeLines(linhas, arq, useBytes = FALSE)
+  message("  Legendas ABNT: ", basename(arq))
 }
 
 # ============================================================
@@ -651,7 +818,7 @@ if (GERAR_COBERTURA) {
   ))
   .nomes_cob_completo <- .nomes_cob_completo[
     !is.na(.nomes_cob_completo) & nzchar(trimws(.nomes_cob_completo))]
-  .novos_nomes <- setdiff(.nomes_cob_completo, ORDEM_RECORTES)
+  .novos_nomes <- setdiff(.nomes_cob_completo, c(ORDEM_RECORTES, names(NOMES_PADRAO)))
   if (length(.novos_nomes) > 0) {
     message("[INFO] Unidades adicionais detectadas (alem das primeiras 500 linhas): ",
             paste(.novos_nomes, collapse = ", "))
@@ -707,6 +874,13 @@ if (GERAR_COBERTURA) {
   
   ANOS_COB <- sort(unique(as.integer(as.character(cobertura$ano))))
   ANO_INI  <- min(ANOS_COB); ANO_FIM <- max(ANOS_COB)
+
+  # Área total (sem recorte): a unidade de maior área. O plugin permite dar
+  # a ela outro nome além de "Shape Completo" (ex.: "Quadrilátero Ferrífero").
+  NOME_AREA_TOTAL <- cobertura %>%
+    filter(as.integer(as.character(ano)) == ANO_INI) %>%
+    group_by(unidade_analise) %>% summarise(a = sum(area_ha, na.rm = TRUE), .groups = "drop") %>%
+    slice_max(a, n = 1, with_ties = FALSE) %>% pull(unidade_analise) %>% as.character()
   
   alt <- alteracoes %>%
     rename_with(~ case_when(
@@ -742,18 +916,20 @@ if (GERAR_COBERTURA) {
       geom_text(
         data=df %>% filter(abs(delta) >= 0.3),
         aes(label=paste0(if_else(delta>0,"+",""),
-                         number(delta,accuracy=0.1,decimal.mark=","),"%"),
+                         number(delta,accuracy=0.1,decimal.mark=",")),
             vjust=if_else(delta>=0,-0.45,1.35)),
-        size=3.3, color="grey20", fontface="bold") +
+        size = .mm(3.3), color="grey20", fontface="bold") +
       scale_fill_manual(values=cores_u, guide="none") +
-      scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix="%"),
+      scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix=" p.p."),
                          expand=expansion(mult=c(0.14,0.16))) +
-      labs(title=.quebrar(paste("Variacao de cobertura |", unidade_nome)),
-           subtitle=paste0("Diferenca percentual ", ANO_FIM, " - ", ANO_INI,
-                           "  |  acima = ganho  |  abaixo = perda"),
-           x=NULL, y="Delta (%)", caption=CAPTION_PADRAO) +
+      labs(title=.quebrar(paste0("Variação da cobertura e uso da terra por classe (",
+                                 ANO_INI, "–", ANO_FIM, ") – ", unidade_nome)),
+           subtitle=paste0("Diferença de participação na área total (", ANO_FIM, " − ", ANO_INI,
+                           "), em pontos percentuais (p.p.); valores positivos indicam ganho ",
+                           "e negativos, perda"),
+           x=NULL, y="Variação (p.p.)", caption=CAPTION_PADRAO) +
       tema_amp + theme(legend.position="none",
-                       axis.text.x=element_text(angle=35,hjust=1,size=10))
+                       axis.text.x=element_text(angle=35,hjust=1,size = .pt(10)))
   }
   
   # ---- C2A — Delta % cobertura integrado (grade) ----
@@ -774,7 +950,7 @@ if (GERAR_COBERTURA) {
       { setNames(.$cor_plot, as.character(.$classe_plot)) }
     
     n_rec  <- length(recortes)
-    n_cols <- if (n_rec <= 2) 1L else if (n_rec <= 9) 2L else if (n_rec <= 20) 3L else 4L
+    n_cols <- if (n_rec <= 2) 1L else if (n_rec <= 9 || ABNT) 2L else if (n_rec <= 20) 3L else 4L
 
     ggplot(df, aes(x=classe_plot, y=delta, fill=classe_plot)) +
       geom_col(color="grey40", linewidth=0.15, width=0.7) +
@@ -782,20 +958,22 @@ if (GERAR_COBERTURA) {
       geom_text(
         data=df %>% filter(abs(delta) >= 0.3),
         aes(label=paste0(if_else(delta>0,"+",""),
-                         number(delta,accuracy=0.1,decimal.mark=","),"%"),
+                         number(delta,accuracy=0.1,decimal.mark=",")),
             vjust=if_else(delta>=0,-0.45,1.35)),
-        size=2.6, color="grey20", fontface="bold") +
+        size = .mm(2.6), color="grey20", fontface="bold") +
       facet_wrap(~unidade_analise, ncol=n_cols, scales="free_y", labeller=rotulo_facet) +
       scale_fill_manual(values=cores_classes, guide="none") +
-      scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix="%"),
+      scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix=" p.p."),
                          expand=expansion(mult=c(0.18,0.22))) +
-      labs(title=paste0("Variacao da cobertura e uso da terra (", ANO_INI, "-", ANO_FIM, ")"),
-           subtitle="Diferenca percentual por classe  |  acima = ganho  |  abaixo = perda",
-           x=NULL, y="Delta (%)", caption=CAPTION_PADRAO) +
+      labs(title=paste0("Variação da cobertura e uso da terra por classe e unidade de análise (",
+                        ANO_INI, "–", ANO_FIM, ")"),
+           subtitle=paste0("Diferença de participação na área total, em pontos percentuais (p.p.); ",
+                           "valores positivos indicam ganho e negativos, perda"),
+           x=NULL, y="Variação (p.p.)", caption=CAPTION_PADRAO) +
       tema_amp +
       theme(legend.position="none",
-            axis.text.x=element_text(angle=35,hjust=1,size=8),
-            strip.text=element_text(face="bold",size=11,hjust=0),
+            axis.text.x=element_text(angle=35,hjust=1,size = .pt(8)),
+            strip.text=element_text(face="bold",size = .pt(11),hjust=0),
             panel.grid.major.x=element_blank(),
             panel.grid.major.y=element_line(color="grey90",linewidth=0.4),
             plot.margin=margin(14,16,10,14))
@@ -820,19 +998,20 @@ if (GERAR_COBERTURA) {
     ggplot(df, aes(x=area_ha, y=categoria, fill=cor_cat)) +
       geom_col(color="grey35", linewidth=0.25, width=0.62) +
       geom_text(aes(label=paste0(number(pct,accuracy=0.1,decimal.mark=","),"%")),
-                hjust=-0.08, size=3.8, fontface="bold", color="grey15") +
+                hjust=-0.08, size = .mm(3.8), fontface="bold", color="grey15") +
       scale_fill_identity() +
       scale_x_continuous(limits=c(0,lim_x),
                          labels=label_number(big.mark=".",decimal.mark=",",suffix=" ha"),
                          expand=expansion(mult=c(0,0))) +
       scale_y_discrete(labels=function(x) str_wrap(x, width=18)) +
-      labs(title=.quebrar(unidade_nome, 55),
-           subtitle=paste0("Categorias de alteracao da cobertura | ", ANO_INI, "-", ANO_FIM),
-           x="Area (ha)", y=NULL, caption=CAPTION_PADRAO) +
+      labs(title=.quebrar(paste0("Categorias de alteração da cobertura (", ANO_INI, "–",
+                                 ANO_FIM, ") – ", unidade_nome), 55),
+           subtitle="Área (ha) por categoria; rótulos indicam o percentual da área total da unidade",
+           x="Área (ha)", y=NULL, caption=CAPTION_PADRAO) +
       tema_amp +
-      theme(plot.title=element_text(face="bold",size=14,hjust=0),
-            axis.text.y=element_text(size=11,lineheight=0.9),
-            axis.text.x=element_text(size=9),
+      theme(plot.title=element_text(face="bold",size = .tit(14),hjust=0),
+            axis.text.y=element_text(size = .pt(11),lineheight=0.9),
+            axis.text.x=element_text(size = .pt(9)),
             panel.grid.major.x=element_line(color="grey90",linewidth=0.4),
             panel.grid.major.y=element_blank(),
             legend.position="none",
@@ -856,24 +1035,25 @@ if (GERAR_COBERTURA) {
              cor_cat   = coalesce(CORES_CATEGORIA[as.character(categoria)], "#888888"))
     
     n_rec  <- length(recortes)
-    n_cols <- if (n_rec <= 2) 1L else if (n_rec <= 9) 2L else if (n_rec <= 20) 3L else 4L
+    n_cols <- if (n_rec <= 2) 1L else if (n_rec <= 9 || ABNT) 2L else if (n_rec <= 20) 3L else 4L
 
     ggplot(df, aes(x=area_ha, y=categoria, fill=cor_cat)) +
       geom_col(color="grey30", linewidth=0.2, width=0.68) +
       geom_text(aes(label=paste0(number(pct,accuracy=0.1,decimal.mark=","),"%")),
-                hjust=-0.08, size=3.2, fontface="bold", color="grey15") +
+                hjust=-0.08, size = .mm(3.2), fontface="bold", color="grey15") +
       facet_wrap(~unidade_analise, ncol=n_cols, scales="free_x", labeller=rotulo_facet) +
       scale_fill_identity() +
       scale_x_continuous(labels=label_number(big.mark=".",decimal.mark=",",suffix=" ha"),
                          expand=expansion(mult=c(0,0.30))) +
       scale_y_discrete(labels=function(x) str_wrap(x, width=20)) +
-      labs(title=paste0("Categorias de alteracao da cobertura (", ANO_INI, "-", ANO_FIM, ")"),
-           subtitle="Area (ha) por recorte  |  Rotulo = % da area total  |  Cores por categoria",
-           x="Area (ha)", y=NULL, caption=CAPTION_PADRAO) +
+      labs(title=paste0("Categorias de alteração da cobertura por unidade de análise (",
+                        ANO_INI, "–", ANO_FIM, ")"),
+           subtitle="Área (ha) por categoria; rótulos indicam o percentual da área total de cada unidade",
+           x="Área (ha)", y=NULL, caption=CAPTION_PADRAO) +
       tema_amp +
-      theme(strip.text=element_text(face="bold",size=11,color="grey15",hjust=0),
-            axis.text.y=element_text(size=10,lineheight=0.85),
-            axis.text.x=element_text(size=8),
+      theme(strip.text=element_text(face="bold",size = .pt(11),color="grey15",hjust=0),
+            axis.text.y=element_text(size = .pt(10),lineheight=0.85),
+            axis.text.x=element_text(size = .pt(8)),
             panel.grid.major.x=element_line(color="grey90",linewidth=0.4),
             panel.grid.major.y=element_blank(),
             legend.position="none",
@@ -950,10 +1130,10 @@ if (GERAR_MATRIZ) {
     df <- dados_bloco
     if (unidade_valor == "ha") {
       df$valor_show <- df$valor
-      lbl_fill <- "Area (ha)"
+      lbl_fill <- "Área (ha)"
       df$label_txt <- ifelse(df$valor_show > 0,
                              number(df$valor_show, big.mark=".", decimal.mark=",", accuracy=1), "")
-      subt <- "Celulas = area (ha) que migrou da origem (linha) para o destino (coluna) | agrupado no Nivel 2"
+      subt <- "Células: área (ha) que passou da classe de origem (linha) à classe de destino (coluna); classes agregadas no Nível 2"
     } else {
       # % da area de origem RECALCULADO a partir do ha agregado ao Nivel 2
       # (somar as fracoes ja prontas seria incorreto apos o reagrupamento)
@@ -961,10 +1141,11 @@ if (GERAR_MATRIZ) {
         mutate(tot_orig   = sum(valor, na.rm = TRUE),
                valor_show = ifelse(tot_orig > 0, valor / tot_orig * 100, 0)) %>%
         ungroup()
-      lbl_fill <- "% da area de origem"
+      lbl_fill <- "% da área
+de origem"
       df$label_txt <- ifelse(df$valor_show > 0,
                              paste0(number(df$valor_show, accuracy=0.1, decimal.mark=","), "%"), "")
-      subt <- "Celulas = % da area de origem que migrou para o destino | agrupado no Nivel 2"
+      subt <- "Células: percentual da área da classe de origem (linha) que passou à classe de destino (coluna); classes agregadas no Nível 2"
     }
     
     diagonal <- df %>% filter(as.character(classe_origem) == as.character(classe_destino))
@@ -987,21 +1168,24 @@ if (GERAR_MATRIZ) {
     ggplot(df, aes(x = classe_destino, y = fct_rev(classe_origem), fill = valor_show)) +
       geom_tile(color = "white", linewidth = 0.4) +
       geom_tile(data = diagonal, fill = NA, color = "#D32F2F", linewidth = 1.1) +
-      geom_text(aes(label = label_txt, color = cor_texto), size = 2.3) +
+      geom_text(aes(label = label_txt, color = cor_texto), size = .mm(2.3)) +
       scale_color_identity() +
       scale_fill_gradientn(colors = c("#FFFFFF","#FFE0B2","#FB8C00","#B71C1C"),
-                           na.value = "white", name = lbl_fill) +
+                           na.value = "white", name = lbl_fill,
+                           labels = label_number(big.mark = ".", decimal.mark = ",")) +
       scale_x_discrete(position = "top",
                        labels = function(x) str_wrap(x, width = 14)) +
-      labs(title = .quebrar(paste("Matriz de transicao de cobertura (Nivel 2) |", recorte_nome)),
-           subtitle = paste0(subt, "  |  Diagonal em vermelho"),
+      labs(title = .quebrar(paste0("Matriz de transição da cobertura e uso da terra (",
+                                   ANO_INI_MAT, "–", ANO_FIM_MAT, ") – ", recorte_nome)),
+           subtitle = paste0(subt, "; contorno vermelho = permanência na mesma classe"),
            x = "Classe de destino", y = "Classe de origem",
            caption = CAPTION_PADRAO) +
       tema_amp +
       theme(axis.text.x = element_text(angle = 45, hjust = 0, vjust = 0,
-                                       size = 7, lineheight = 0.85),
-            axis.text.y = element_text(size = 8),
+                                       size = .pt(7), lineheight = 0.85),
+            axis.text.y = element_text(size = .pt(8)),
             legend.position = "right",
+            legend.title = element_text(size = .pt(8)),
             panel.grid = element_blank())
   }
   
@@ -1027,6 +1211,18 @@ if (GERAR_MATRIZ) {
 
   ABAS_MAT <- excel_sheets(arq_mat)
   ABAS_MAT <- ABAS_MAT[!grepl(.RE_ABA_META, ABAS_MAT)]   # ignora metadados
+
+  # Anos da matriz, lidos do título do bloco ("Matriz de Transição | 1985 → 2024 | ha")
+  ANO_INI_MAT <- ANO_FIM_MAT <- NA
+  if (length(ABAS_MAT) > 0) {
+    .tit_mat <- tryCatch({
+      .r <- suppressMessages(read_excel(arq_mat, sheet = ABAS_MAT[1], col_names = FALSE,
+                                        col_types = "text", n_max = 5))
+      .t <- unlist(.r[[1]]); .t[grepl("Matriz de Transi", .t)][1]
+    }, error = function(e) NA_character_)
+    .anos_mat <- as.integer(regmatches(.tit_mat, gregexpr("\\b(19|20)\\d{2}\\b", .tit_mat))[[1]])
+    if (length(.anos_mat) >= 2) { ANO_INI_MAT <- min(.anos_mat); ANO_FIM_MAT <- max(.anos_mat) }
+  }
   message("\nAbas (recortes) no arquivo de Matriz: ", paste(ABAS_MAT, collapse=" | "))
 }
 
@@ -1046,10 +1242,21 @@ if (GERAR_FRAG) {
     message("  Atualize o plugin AnP - Fragmentacao para v1.1 ou superior e reprocesse.\n")
   }
   
-  ORDEM_CLASSES_TAM <- c(
-    "Menor que 1 ha","1 a 10 ha","10 a 20 ha","20 a 30 ha",
-    "30 a 50 ha","50 a 100 ha","100 a 200 ha","Maior que 200 ha"
-  )
+  # Ordem das classes de tamanho lida dos próprios rótulos — as classes são
+  # configuráveis no plugin (limiares por bioma) e os rótulos variam entre
+  # versões ("Menor que 1 ha" / "menor 1 ha"). Ordena pelo primeiro número:
+  # "menor/abaixo de X" antes de tudo, "maior/acima de X" depois de tudo.
+  .ordem_classes_tam <- function(rotulos) {
+    r <- unique(as.character(rotulos)); r <- r[!is.na(r) & nzchar(trimws(r))]
+    num <- vapply(seq_along(r), function(i) {
+      n <- suppressWarnings(as.numeric(sub(",", ".", regmatches(r[i], regexpr("[0-9]+([.,][0-9]+)?", r[i])))))
+      if (length(n) == 0 || is.na(n)) return(Inf)
+      if (grepl("menor|abaixo|<", r[i], ignore.case = TRUE)) return(n - 1e-6)
+      if (grepl("maior|acima|>", r[i], ignore.case = TRUE)) return(n + 1e9)
+      n
+    }, numeric(1))
+    r[order(num)]
+  }
   
   # ── Grupo alvo dos gráficos F1/F2/F2b ────────────────────────────────────
   # O módulo de Fragmentação só calcula métricas para os grupos que o
@@ -1089,11 +1296,27 @@ if (GERAR_FRAG) {
     anos_det   <- sort(as.integer(gsub("valor_", "", cols_valor)))
     if (length(anos_det) >= 2) {
       ANO1_FRAG <- anos_det[1]; ANO2_FRAG <- anos_det[length(anos_det)]
+      col_v1 <- paste0("valor_", ANO1_FRAG)
+      col_v2 <- paste0("valor_", ANO2_FRAG)
+    } else if (all(c("valor_ano1", "valor_ano2") %in% names(frag_var_raw))) {
+      # Formato de versões anteriores do módulo (colunas valor_ano1 /
+      # valor_ano2): os anos vêm da aba Metricas (coluna "ano").
+      anos_met <- tryCatch(
+        sort(unique(as.integer(read_excel(arq_frag, sheet = "Metricas")$ano))),
+        error = function(e) integer(0))
+      anos_met <- anos_met[!is.na(anos_met)]
+      if (length(anos_met) < 2)
+        stop("Aba Variacoes no formato antigo (valor_ano1/valor_ano2) e ",
+             "a aba Metricas nao informa os anos. Gere a planilha novamente ",
+             "com o modulo de Fragmentacao v1.1.")
+      ANO1_FRAG <- anos_met[1]; ANO2_FRAG <- anos_met[length(anos_met)]
+      col_v1 <- "valor_ano1"; col_v2 <- "valor_ano2"
+      message("  [INFO] Planilha de fragmentacao no formato antigo — anos ",
+              ANO1_FRAG, " e ", ANO2_FRAG, " lidos da aba Metricas.")
     } else {
-      stop("Nao foi possivel detectar as colunas valor_<ano> na aba Variacoes.")
+      stop("Nao foi possivel detectar as colunas de valor na aba Variacoes ",
+           "(esperado valor_<ano> ou valor_ano1/valor_ano2).")
     }
-    col_v1 <- paste0("valor_", ANO1_FRAG)
-    col_v2 <- paste0("valor_", ANO2_FRAG)
     
     GRUPO_F1 <- .detectar_grupo_disponivel(frag_var_raw, GRUPO_F1_PREFERIDO)
     
@@ -1157,16 +1380,17 @@ if (GERAR_FRAG) {
            delta_pct_pct = (valor_ano2 - valor_ano1) / valor_ano1 * 100)
   
   if (TEM_DIST_PORTE) {
-    frag_dist_frag <- read_excel(arq_frag, sheet = "Dist_Fragmentos") %>%
-      mutate(recorte = factor(padronizar(recorte), levels = ORDEM_RECORTES),
-             across(c(n_fragmentos,area_ha,pct_n,pct_area), as.numeric),
-             classe_tamanho = factor(classe_tamanho, levels = ORDEM_CLASSES_TAM),
-             ano = factor(as.character(as.integer(ano))))
-    frag_dist_nuc <- read_excel(arq_frag, sheet = "Dist_Nucleos") %>%
-      mutate(recorte = factor(padronizar(recorte), levels = ORDEM_RECORTES),
-             across(c(n_fragmentos,area_ha,pct_n,pct_area), as.numeric),
-             classe_tamanho = factor(classe_tamanho, levels = ORDEM_CLASSES_TAM),
-             ano = factor(as.character(as.integer(ano))))
+    .ler_dist <- function(aba) {
+      read_excel(arq_frag, sheet = aba) %>%
+        filter(!is.na(classe_tamanho), !is.na(suppressWarnings(as.integer(ano)))) %>%
+        mutate(recorte = factor(padronizar(recorte), levels = ORDEM_RECORTES),
+               across(c(n_fragmentos,area_ha,pct_n,pct_area), as.numeric),
+               classe_tamanho = factor(classe_tamanho,
+                                       levels = .ordem_classes_tam(classe_tamanho)),
+               ano = factor(as.character(as.integer(ano))))
+    }
+    frag_dist_frag <- .ler_dist("Dist_Fragmentos")
+    frag_dist_nuc  <- .ler_dist("Dist_Nucleos")
   }
   
   message("\nFragmentacao carregada. Anos detectados: ", ANO1_FRAG, " -> ", ANO2_FRAG)
@@ -1207,20 +1431,20 @@ if (GERAR_FRAG) {
         indice    = indices_recortes[as.character(recorte)],
         cor       = coalesce(CORES_RECORTE[as.character(recorte)], "#888888"),
         metrica_label = recode(metrica,
-                               "NP"      = "Delta NP - numero de fragmentos (%)",
-                               "TCA"     = "Delta TCA - area nucleo total (%)",
-                               "CORE_MN" = "Delta CORE MN - area nucleo media (%)",
-                               "ED"      = "Delta ED - densidade de borda (%)",
-                               "LPI"     = "Delta LPI - maior fragmento (%)",
-                               "MESH"    = "Delta MESH - tamanho efetivo de malha (%)"
+                               "NP"      = "NP – número de fragmentos",
+                               "TCA"     = "TCA – área núcleo total",
+                               "CORE_MN" = "CORE_MN – área núcleo média",
+                               "ED"      = "ED – densidade de borda",
+                               "LPI"     = "LPI – índice do maior fragmento",
+                               "MESH"    = "MESH – tamanho efetivo de malha"
         ),
         metrica_label = factor(metrica_label, levels=c(
-          "Delta NP - numero de fragmentos (%)",
-          "Delta TCA - area nucleo total (%)",
-          "Delta CORE MN - area nucleo media (%)",
-          "Delta ED - densidade de borda (%)",
-          "Delta LPI - maior fragmento (%)",
-          "Delta MESH - tamanho efetivo de malha (%)"
+          "NP – número de fragmentos",
+          "TCA – área núcleo total",
+          "CORE_MN – área núcleo média",
+          "ED – densidade de borda",
+          "LPI – índice do maior fragmento",
+          "MESH – tamanho efetivo de malha"
         ))
       )
     
@@ -1231,7 +1455,7 @@ if (GERAR_FRAG) {
                LARGURA_LEGENDA),
       recortes)
     n_rec        <- length(recortes)
-    ncol_legenda <- min(6, max(2, ceiling(sqrt(n_rec))))
+    ncol_legenda <- if (ABNT) min(2, n_rec) else min(6, max(2, ceiling(sqrt(n_rec))))
     
     ggplot(df, aes(x=factor(indice, levels=seq_along(recortes)),
                    y=delta_pct_pct, fill=recorte)) +
@@ -1241,26 +1465,26 @@ if (GERAR_FRAG) {
         aes(label=paste0(if_else(delta_pct_pct>=0,"+",""),
                          number(delta_pct_pct,accuracy=0.1,decimal.mark=","),"%"),
             vjust=if_else(delta_pct_pct>=0,-0.4,1.3)),
-        size=2.8, fontface="bold", color="grey15") +
+        size = .mm(2.8), fontface="bold", color="grey15") +
       facet_wrap(~metrica_label, ncol=2, scales="free_y") +
       scale_fill_manual(values = CORES_RECORTE, breaks = recortes,
                         labels = rotulos_legenda, name = NULL) +
       scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix="%"),
                          expand=expansion(mult=c(0.18,0.22))) +
       guides(fill = guide_legend(ncol = ncol_legenda, byrow = FALSE)) +
-      labs(title=paste0("Variacao das metricas de fragmentacao (",
-                        ANO1_FRAG, "-", ANO2_FRAG, ") | ", grupo_sel),
-           subtitle=paste0("Delta% = (valor final - valor inicial) / valor inicial x 100 | ",
-                           grupo_sel, "  |  Numeros do eixo = indice do recorte (ver legenda)"),
-           x=NULL, y=NULL, caption=CAPTION_PADRAO) +
+      labs(title=paste0("Variação relativa das métricas de fragmentação da paisagem (",
+                        ANO1_FRAG, "–", ANO2_FRAG, ") – ", grupo_sel),
+           subtitle=paste0("Variação relativa = (valor final − valor inicial) / valor inicial × 100; ",
+                           "números no eixo identificam a unidade de análise (ver legenda)"),
+           x="Unidade de análise", y="Variação relativa (%)", caption=CAPTION_PADRAO) +
       tema_amp +
-      theme(strip.text=element_text(face="bold",size=10,hjust=0),
-            axis.text.x=element_text(size=8),
-            axis.text.y=element_text(size=8),
+      theme(strip.text=element_text(face="bold",size = .pt(10),hjust=0),
+            axis.text.x=element_text(size = .pt(8)),
+            axis.text.y=element_text(size = .pt(8)),
             panel.grid.major.x=element_blank(),
             panel.grid.major.y=element_line(color="grey90",linewidth=0.4),
             legend.position="bottom",
-            legend.text=element_text(size=7.5, lineheight=0.9),
+            legend.text=element_text(size = .pt(7.5), lineheight=0.9),
             legend.key.size=unit(0.35,"cm"),
             plot.margin=margin(14,16,10,14))
   }
@@ -1268,7 +1492,8 @@ if (GERAR_FRAG) {
   # ---- F2 — Espelho: distribuicao por classe de tamanho ----
   grafico_F2_espelho <- function(recorte_nome, tipo="fragmentos", grupo_sel=NULL) {
     aba        <- if (tipo=="fragmentos") frag_dist_frag else frag_dist_nuc
-    tipo_label <- if (tipo=="fragmentos") "Fragmentos" else "Nucleos"
+    tipo_label <- if (tipo=="fragmentos") "fragmentos" else "áreas núcleo"
+    tipo_art   <- if (tipo=="fragmentos") "dos" else "das"
     
     df <- aba %>%
       filter(if ("grupo" %in% names(.) && !is.null(grupo_sel)) grupo==grupo_sel else TRUE,
@@ -1292,17 +1517,18 @@ if (GERAR_FRAG) {
       geom_col(position=position_dodge(width=0.75), width=0.65, linewidth=0.3) +
       geom_label(aes(label=label_combo, group=ano),
                  position=position_dodge(width=0.75),
-                 vjust=-0.15, size=2.6, fontface="bold", lineheight=1.1,
+                 vjust=-0.15, size = .mm(2.6), fontface="bold", lineheight=1.1,
                  linewidth=0.3, label.padding=unit(0.18,"lines"),
                  label.r=unit(0.12,"lines"), fill="white", color="#0A5540") +
       scale_fill_manual(values=cores_ano) +
       scale_color_manual(values=borda_ano, guide="none") +
       scale_y_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",suffix="%"),
                          expand=expansion(mult=c(0,0.45))) +
-      labs(x=NULL, y="Participacao no num total (%)", fill=NULL) +
+      labs(x=NULL, y=paste0("Participação no número
+total de ", tipo_label, " (%)"), fill=NULL) +
       tema_amp +
       theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(),
-            axis.text.y=element_text(size=10), axis.title.y=element_text(size=10),
+            axis.text.y=element_text(size = .pt(10)), axis.title.y=element_text(size = .pt(10)),
             panel.grid.major.x=element_blank(), legend.position="none",
             plot.margin=margin(10,14,4,14))
     
@@ -1310,7 +1536,7 @@ if (GERAR_FRAG) {
       geom_col(position=position_dodge(width=0.75), width=0.65, linewidth=0.3) +
       geom_text(aes(label=label_pct_area, group=ano),
                 position=position_dodge(width=0.75),
-                vjust=1.4, size=2.8, fontface="bold", color="grey20") +
+                vjust=1.4, size = .mm(2.8), fontface="bold", color="grey20") +
       scale_fill_manual(values=cores_ano, labels=anos_niveis,
                         guide=guide_legend(title=NULL,
                                            override.aes=list(color=unname(borda_ano)),
@@ -1319,12 +1545,13 @@ if (GERAR_FRAG) {
       scale_y_continuous(trans="reverse",
                          labels=label_number(accuracy=0.1,decimal.mark=",",suffix="%"),
                          expand=expansion(mult=c(0.28,0))) +
-      labs(x="Classe de tamanho", y="Participacao na area total (%)", fill=NULL) +
+      labs(x="Classe de tamanho", y="Participação na
+área total (%)", fill=NULL) +
       tema_amp +
-      theme(axis.text.x=element_text(angle=35,hjust=1,size=10),
-            axis.text.y=element_text(size=10), axis.title.y=element_text(size=10),
+      theme(axis.text.x=element_text(angle=35,hjust=1,size = .pt(10)),
+            axis.text.y=element_text(size = .pt(10)), axis.title.y=element_text(size = .pt(10)),
             panel.grid.major.x=element_blank(), legend.position="bottom",
-            legend.key.size=unit(0.55,"cm"), legend.text=element_text(size=11,face="bold"),
+            legend.key.size=unit(0.55,"cm"), legend.text=element_text(size = .pt(11),face="bold"),
             plot.margin=margin(4,14,10,14))
     
     sep <- ggplot() + theme_void() +
@@ -1334,14 +1561,15 @@ if (GERAR_FRAG) {
     (p_top / sep / p_bot) +
       plot_layout(heights=c(10,0.05,10)) +
       plot_annotation(
-        title  = .quebrar(paste("Distribuicao por classe de tamanho -", tipo_label,
-                                if (!is.null(grupo_sel)) paste("|", grupo_sel) else "",
-                                "|", recorte_nome)),
-        caption= paste0("Caixa verde = num de ", tolower(tipo_label),
-                        " por classe (resultado global) | ", CAPTION_PADRAO),
-        theme  = theme(plot.title=element_text(face="bold",size=14,margin=margin(b=8),
+        title  = .quebrar(paste0("Distribuição ", tipo_art, " ", tipo_label, " por classe de tamanho",
+                                 if (!is.null(grupo_sel)) paste0(" – ", grupo_sel) else "",
+                                 " – ", recorte_nome)),
+        subtitle = paste0("Acima: participação no número total de ", tipo_label,
+                          " (rótulo: quantidade e %); abaixo: participação na área total"),
+        caption= paste0(CAPTION_PADRAO),
+        theme  = theme(plot.title=element_text(face="bold",size = .tit(14),margin=margin(b=8),
                                                lineheight=1.05),
-                       plot.caption=element_text(color="grey55",size=8,hjust=1,
+                       plot.caption=element_text(color="grey55",size = .pt(8),hjust=1,
                                                  margin=margin(t=6)))
       )
   }
@@ -1412,7 +1640,7 @@ if (GERAR_RELATORIO) {
       arrange(ano, desc(area_ha))
     
     # Soma as fatias < 1% (por ano) numa unica classe
-    ROTULO_OUTROS <- "Soma de outros valores inferiores a 1%"
+    ROTULO_OUTROS <- ROTULO_OUTROS_1PC
     df <- df %>%
       mutate(classe = if_else(pct < 1, ROTULO_OUTROS, as.character(classe)),
              cor    = if_else(pct < 1, "#B0B0B0", cor)) %>%
@@ -1463,7 +1691,26 @@ if (GERAR_RELATORIO) {
         label_pct = paste0(number(pct, accuracy=0.1, decimal.mark=","), "%")
       )
     
+    # Perfil ABNT: sem setas externas (no tamanho impresso os rótulos das
+    # fatias pequenas se sobrepõem). Os percentuais de cada ano vão para a
+    # legenda — "Classe (1985% → 2024%)" — e só as fatias grandes recebem
+    # rótulo dentro do anel.
+    if (ABNT) df_pequena <- df_pequena[0, ]
     tem_pequenas <- nrow(df_pequena) > 0
+    .pct_leg <- df %>%
+      select(classe, ano, pct) %>%
+      tidyr::complete(classe, ano, fill = list(pct = 0)) %>%
+      group_by(classe) %>%
+      # 0 aqui = classe ausente ou somada em "outros valores inferiores a 1%"
+      # naquele ano -> "< 1%" (e não "0,0%", que seria enganoso)
+      summarise(txt = paste(ifelse(pct[order(ano)] > 0,
+                                   paste0(number(pct[order(ano)], accuracy = 0.1,
+                                                 decimal.mark = ","), "%"),
+                                   "< 1%"),
+                            collapse = " → "), .groups = "drop")
+    rotulos_leg <- if (ABNT)
+      setNames(paste0(.pct_leg$classe, " (", .pct_leg$txt, ")"), .pct_leg$classe)
+    else setNames(as.character(.pct_leg$classe), .pct_leg$classe)
     x_lim_max <- if (tem_pequenas) max(df_pequena$x_rotulo) + 0.35 else 2.5
     
     # Rótulo central de cada rosca — área total do recorte naquele ano
@@ -1484,7 +1731,7 @@ if (GERAR_RELATORIO) {
         aes(x = 2, y = ymid,
             label = paste0(number(pct, accuracy=0.1, decimal.mark=","), "%"),
             color = cor_texto),
-        size = 3.1, fontface = "bold") +
+        size = .mm(3.1), fontface = "bold") +
       scale_color_identity()
     
     # Seta + rótulo externo — só para fatias pequenas (se houver)
@@ -1499,25 +1746,33 @@ if (GERAR_RELATORIO) {
         geom_text(
           data = df_pequena,
           aes(x = x_rotulo, y = ymid, label = label_pct),
-          size = 2.7, fontface = "bold", color = "grey20")
+          size = .mm(2.7), fontface = "bold", color = "grey20")
     }
     
     p +
       geom_text(data = df_central, aes(x = 0.4, y = 0, label = label_central),
-                inherit.aes = FALSE, size = 3.6, fontface = "bold", color = "grey20",
+                inherit.aes = FALSE, size = .mm(3.6), fontface = "bold", color = "grey20",
                 lineheight = 0.95) +
       facet_wrap(~ano, ncol = length(unique(df$ano))) +
       scale_fill_manual(values = cores_map, name = NULL,
-                        labels = function(x) str_wrap(x, width = 24)) +
-      labs(title = .quebrar(paste0("Composição de cobertura da terra | ", unidade_nome)),
-           subtitle = paste0(nivel_label, "  |  Paleta MapBiomas Coleção 10",
-                             if (tem_pequenas) paste0("  |  Setas indicam classes < ", LIMIAR_CALLOUT, "%") else ""),
+                        labels = function(x) str_wrap(rotulos_leg[x], width = if (ABNT) 40 else 24)) +
+      guides(fill = guide_legend(ncol = if (ABNT) 2 else 1)) +
+      labs(title = .quebrar(paste0("Composição da cobertura e uso da terra – ", unidade_nome,
+                                   " (", nivel_label, ")")),
+           subtitle = paste0("Percentual da área total por classe; centro: área total (ha) e ano",
+                             if (tem_pequenas) paste0("; setas indicam classes com menos de ",
+                                                      LIMIAR_CALLOUT, "%") else "",
+                             if (ABNT) paste0("; legenda: participação de cada classe em ",
+                                              paste(sort(unique(df$ano)), collapse = " → "))
+                             else ""),
            caption = CAPTION_PADRAO) +
       theme_void(base_size = FONTE_BASE) +
-      theme(legend.position   = "right",
-            legend.text       = element_text(size = 9),
+      theme(legend.position   = if (ABNT) "bottom" else "right",
+            legend.text       = element_text(size = .pt(9)),
+            legend.key.size   = unit(if (ABNT) 0.35 else 0.5, "cm"),
             strip.text        = element_text(face = "bold", size = FONTE_BASE),
-            plot.title        = element_text(face="bold", size=FONTE_BASE+3, hjust=0,
+            plot.title.position = "plot",
+            plot.title        = element_text(face="bold", size=.tit(FONTE_BASE+3), hjust=0,
                                              margin=margin(b=4), lineheight=1.05),
             plot.subtitle     = element_text(color="grey45", size=FONTE_BASE-1, hjust=0,
                                              margin=margin(b=8)),
@@ -1530,7 +1785,7 @@ if (GERAR_RELATORIO) {
 # ============================================================
 #  10. EXECUCAO E EXPORTACAO
 # ============================================================
-message("\n=== Gerando graficos [AnP v1.1] ===\n")
+message("\n=== Gerando graficos [AnP v1.2] ===\n")
 
 if (GERAR_COBERTURA) {
   unidades      <- unique(as.character(cob$unidade_analise))
@@ -1542,7 +1797,7 @@ if (GERAR_COBERTURA) {
   for (u in unidades) {
     slug <- .slug(u)
     salvar_grafico(paste0("C2_delta_cobertura_", slug),
-                   grafico_C2_delta(u), w=9, h=7)
+                   grafico_C2_delta(u), w=9, h=7, h_abnt=10)
   }
   
   message("[C2A] Variacao de cobertura - integrado...")
@@ -1552,13 +1807,14 @@ if (GERAR_COBERTURA) {
   h_c2a    <- min(49, max(7, nr_c2a * 4.5))
   w_c2a    <- c(10, 14, 19, 24)[nc_c2a]
   salvar_grafico("C2A_delta_cobertura_integrado",
-                 grafico_C2A_integrado(RECORTES_INT_COB), w=w_c2a, h=h_c2a)
+                 grafico_C2A_integrado(RECORTES_INT_COB), w=w_c2a, h=h_c2a,
+                 h_abnt=3 + ceiling(n_c2a / min(2, n_c2a)) * 5)
   
   message("[C4] Categorias de alteracao por recorte (individual)...")
   for (u in unidades_alt) {
     slug <- .slug(u)
     salvar_grafico(paste0("C4_categorias_", slug),
-                   grafico_C4_individual(u), w=8, h=7)
+                   grafico_C4_individual(u), w=8, h=7, h_abnt=9)
   }
   
   message("[C4A] Grade de categorias - integrado...")
@@ -1567,7 +1823,8 @@ if (GERAR_COBERTURA) {
   h_c4a    <- min(49, max(8, nr_c4a * 4.5))
   w_c4a    <- c(10, 14, 19, 24)[nc_c4a]
   salvar_grafico("C4A_categorias_grade",
-                 grafico_C4A_grade(RECORTES_INT_COB), w=w_c4a, h=h_c4a)
+                 grafico_C4A_grade(RECORTES_INT_COB), w=w_c4a, h=h_c4a,
+                 h_abnt=2 + ceiling(n_c2a / min(2, n_c2a)) * 4.5)
 }
 
 if (GERAR_MATRIZ) {
@@ -1591,10 +1848,10 @@ if (GERAR_MATRIZ) {
     tam <- max(9, n_classes * 0.75)
     salvar_grafico(paste0("M1_matriz_ha_", slug),
                    grafico_M1_heatmap(df_n2, "ha", nome_mat),
-                   w=tam+2, h=tam)
+                   w=tam+2, h=tam, h_abnt=15)
     salvar_grafico(paste0("M1_matriz_percentual_", slug),
                    grafico_M1_heatmap(df_n2, "percentual", nome_mat),
-                   w=tam+2, h=tam)
+                   w=tam+2, h=tam, h_abnt=15)
   }
 }
 
@@ -1613,7 +1870,8 @@ if (GERAR_FRAG) {
     gslug <- .slug(gp)
     message("[F1] Metricas de fragmentacao — grupo: ", gp)
     salvar_grafico(paste0("F1_deltas_fragmentacao_", gslug),
-                   grafico_F1_deltas(RECORTES_INT_FRAG, gp), w=13, h=10)
+                   grafico_F1_deltas(RECORTES_INT_FRAG, gp), w=13, h=10,
+                   h_abnt=15 + ceiling(length(RECORTES_INT_FRAG) / 2) * 0.6)
 
     if (TEM_DIST_PORTE) {
       recortes_frag <- unique(as.character(frag_dist_frag$recorte))
@@ -1625,13 +1883,13 @@ if (GERAR_FRAG) {
       for (r in recortes_frag) {
         slug <- .slug(r)
         salvar_grafico(paste0("F2_espelho_fragmentos_", gslug, "_", slug),
-                       grafico_F2_espelho(r, tipo="fragmentos", grupo_sel=gp), w=10, h=9)
+                       grafico_F2_espelho(r, tipo="fragmentos", grupo_sel=gp), w=10, h=9, h_abnt=15)
       }
       message("[F2b] Espelho nucleos — grupo: ", gp)
       for (r in recortes_nuc) {
         slug <- .slug(r)
         salvar_grafico(paste0("F2b_espelho_nucleos_", gslug, "_", slug),
-                       grafico_F2_espelho(r, tipo="nucleos", grupo_sel=gp), w=10, h=9)
+                       grafico_F2_espelho(r, tipo="nucleos", grupo_sel=gp), w=10, h=9, h_abnt=15)
       }
     }
   }
@@ -1647,16 +1905,16 @@ if (GERAR_RELATORIO) {
   for (u in unidades_rel) {
     slug <- .slug(u)
     salvar_grafico(paste0("P1_pizza_N1_", slug),
-                   grafico_P1_pizza(pizza_n1, u, "Nível 1 — grandes grupos"),
-                   w = largura_p1, h = 7)
+                   grafico_P1_pizza(pizza_n1, u, "Nível 1"),
+                   w = largura_p1, h = 7, h_abnt = 10)
   }
   
   message("[P1b] Composicao de cobertura (rosca) - Nivel 2...")
   for (u in unidades_rel) {
     slug <- .slug(u)
     salvar_grafico(paste0("P1b_pizza_N2_", slug),
-                   grafico_P1_pizza(pizza_n2, u, "Nível 2 — classes detalhadas"),
-                   w = largura_p1 + 2, h = 7.5)
+                   grafico_P1_pizza(pizza_n2, u, "Nível 2"),
+                   w = largura_p1 + 2, h = 7.5, h_abnt = 11.5)
   }
   
   if (!is.null(pizza_n3)) {
@@ -1664,8 +1922,8 @@ if (GERAR_RELATORIO) {
     for (u in unidades_rel) {
       slug <- .slug(u)
       salvar_grafico(paste0("P1c_pizza_N3_", slug),
-                     grafico_P1_pizza(pizza_n3, u, "Nível 3 — classes intermediárias"),
-                     w = largura_p1 + 3, h = 8)
+                     grafico_P1_pizza(pizza_n3, u, "Nível 3"),
+                     w = largura_p1 + 3, h = 8, h_abnt = 12.5)
     }
   }
   
@@ -1674,8 +1932,8 @@ if (GERAR_RELATORIO) {
     for (u in unidades_rel) {
       slug <- .slug(u)
       salvar_grafico(paste0("P1d_pizza_N4_", slug),
-                     grafico_P1_pizza(pizza_n4, u, "Nível 4 — classes detalhadas"),
-                     w = largura_p1 + 4, h = 9)
+                     grafico_P1_pizza(pizza_n4, u, "Nível 4"),
+                     w = largura_p1 + 4, h = 9, h_abnt = 13.5)
     }
   }
 }
@@ -1738,7 +1996,7 @@ if (GERAR_MULTIVAR) {
         # Numeral romano só conta se vier seguido de espaço, hífen ou fim
         # (evita "I" para "Itirapina", "V" para "Vinhedo").
         m <- regmatches(x, regexpr("^[IVXivx]+[ab]?(?=\\s|-|$)", x, perl=TRUE))
-        if (length(m) == 0 || !nzchar(m)) substr(gsub("_"," ",x), 1, 4) else m
+        if (length(m) == 0 || !nzchar(m)) .iniciais(x) else m
       }
       scores <- scores %>%
         mutate(id_curto = sapply(as.character(unidade_analise), .id_curto))
@@ -1785,7 +2043,7 @@ if (GERAR_MULTIVAR) {
         ggrepel::geom_text_repel(data=loadings,
                                  aes(x=PC1*escala*1.14, y=PC2*escala*1.14, label=classe),
                                  inherit.aes=FALSE,
-                                 size=2.7, color="grey40", fontface="italic", max.overlaps=20) +
+                                 size = .mm(2.7), color="grey40", fontface="italic", max.overlaps=20) +
         # Setas de trajetória por unidade
         geom_segment(data=df_seta_pca,
                      aes(x=PC1_ini, y=PC2_ini, xend=PC1_fim, yend=PC2_fim,
@@ -1795,46 +2053,47 @@ if (GERAR_MULTIVAR) {
         # Ponto 1985 — círculo aberto/pastel
         geom_point(data=df_pca_ini,
                    aes(x=PC1, y=PC2, color=as.character(unidade_analise)),
-                   shape=21, size=4.2, stroke=1.3,
+                   shape=21, size=.sz(4.2), stroke=.sz(1.3),
                    fill=adjustcolor(cor_pca[as.character(df_pca_ini$unidade_analise)],
                                     alpha.f=0.22),
                    show.legend=FALSE) +
         # Ponto 2024 — círculo cheio
         geom_point(data=df_pca_fim,
                    aes(x=PC1, y=PC2, color=as.character(unidade_analise)),
-                   shape=19, size=4.2, show.legend=TRUE) +
+                   shape=19, size=.sz(4.2), show.legend=TRUE) +
         # Rótulos: id_curto
         geom_text(data=df_pca_ini,
                   aes(x=PC1, y=PC2, label=id_curto,
                       color=as.character(unidade_analise)),
-                  size=2.8, fontface="bold", vjust=2.5, show.legend=FALSE) +
+                  size = .mm(2.8), fontface="bold", vjust=2.5, show.legend=FALSE) +
         geom_text(data=df_pca_fim,
                   aes(x=PC1, y=PC2, label=id_curto,
                       color=as.character(unidade_analise)),
-                  size=2.8, fontface="bold", vjust=-1.8, show.legend=FALSE) +
+                  size = .mm(2.8), fontface="bold", vjust=-1.8, show.legend=FALSE) +
         scale_color_manual(values=cor_pca, name=NULL,
                            labels=setNames(.quebrar(leg_pca$unidade_analise, LARGURA_LEGENDA),
                                            leg_pca$unidade_analise)) +
-        guides(color=guide_legend(nrow=ceiling(n_unid/3),
-                                  override.aes=list(shape=19, size=4))) +
+        guides(color=guide_legend(ncol=if (ABNT) 2 else NULL,
+                                  nrow=if (ABNT) NULL else ceiling(n_unid/3),
+                                  override.aes=list(shape=19, size=.sz(4)))) +
         labs(
-          title    = str_wrap("PCA — Trajetória do Perfil de Cobertura da Terra (1985 → 2024)",
-                              width=75),
-          subtitle = paste0("PC1: ", round(var_exp[1],1), "%  |  PC2: ",
-                            round(var_exp[2],1), "% da variância  |  ",
-                            "Setas cinza = classes determinantes  |  ",
-                            "○ = ", a_ini_pca, " (pastel)  |  ● = ", a_fim_pca, " (cheio)"),
-          x=paste0("PC1 (", round(var_exp[1],1), "%)"),
-          y=paste0("PC2 (", round(var_exp[2],1), "%)"),
+          title    = .quebrar(paste0("Análise de componentes principais (PCA) da composição da ",
+                                     "cobertura e uso da terra por unidade de análise (",
+                                     a_ini_pca, "–", a_fim_pca, ")")),
+          subtitle = paste0("Setas cinza: classes de maior contribuição; círculo vazado: ",
+                            a_ini_pca, "; círculo cheio: ", a_fim_pca,
+                            "; setas coloridas: trajetória de cada unidade"),
+          x=paste0("PC1 (", number(var_exp[1], accuracy=0.1, decimal.mark=","), "%)"),
+          y=paste0("PC2 (", number(var_exp[2], accuracy=0.1, decimal.mark=","), "%)"),
           caption=paste0(str_wrap(leg_txt, width=110), "
 ", CAPTION_PADRAO)
         ) +
         tema_amp +
         theme(panel.grid      = element_line(color="grey93"),
               legend.position = "bottom",
-              legend.text     = element_text(size=8.5, lineheight=0.9),
-              legend.key.size = unit(0.8,"cm"),
-              plot.caption    = element_text(size=7.5, color="grey35",
+              legend.text     = element_text(size = .pt(8.5), lineheight=0.9),
+              legend.key.size = unit(if (ABNT) 0.45 else 0.8,"cm"),
+              plot.caption    = element_text(size = .pt(7.5), color="grey35",
                                              hjust=0, lineheight=1.3))
     }
     
@@ -1929,49 +2188,102 @@ if (GERAR_MULTIVAR) {
       
       # delta_pp_plot já calculado no pivot (NA onde ambos anos ausentes)
       
-      ggplot(df_delta, aes(x = classe_n2, y = unidade_analise, fill = delta_pp_plot)) +
+      # Cor = VARIAÇÃO RELATIVA (%) da participação de cada classe, em faixas.
+      # (A variação em p.p. favorece as classes e unidades grandes: o mesmo
+      # tom representaria dimensões muito diferentes.)
+      # Perdas e ganhos com 5 faixas cada, espelhadas em proporção: a perda
+      # relativa não passa de 100%, e dobrar (+100%) equivale a cair pela
+      # metade (-50%), triplicar (+200%) a cair para um terço (-67%).
+      FAIXAS_PERDA <- c(0, 10, 20, 50, 70, Inf)     # |variação| das perdas
+      FAIXAS_GANHO <- c(0, 10, 20, 100, 200, Inf)
+      # Intervalos fechados à direita: "0 a 10" inclui o 10; "> 10 a 20" começa
+      # logo acima de 10 (10,001...) e inclui o 20 — sem sobreposição.
+      ROT_PERDA <- c("0 a 10", "> 10 a 20", "> 20 a 50", "> 50 a 70", "> 70")
+      ROT_GANHO <- c("0 a 10", "> 10 a 20", "> 20 a 100", "> 100 a 200", "> 200")
+      # Laranja/terracota (perda) × azul (ganho): par de contraste neutro, sem a
+      # leitura "ambiental" de vermelho/verde; mesmas cores dos painéis G e H.
+      CORES_PERDA <- c("#fde3cc", "#f8b98a", "#ec8a4f", "#c95f22", "#7f3410")
+      CORES_GANHO <- c("#dce9f5", "#a8c9e6", "#6aa3d3", "#2f74b5", "#163f6e")
+      COR_SEM_DADO <- "#e4e4e4"
+      NIVEIS_FX <- c(paste0("P", 5:1), "SD", paste0("G", 1:5))
+      CORES_FX  <- setNames(c(rev(CORES_PERDA), COR_SEM_DADO, CORES_GANHO), NIVEIS_FX)
+
+      # Grade completa unidade × classe: toda célula aparece, inclusive as
+      # sem dado (classe < 1% nos dois anos ou ausente na unidade).
+      df_delta <- df_delta %>%
+        tidyr::complete(unidade_analise, classe_n2) %>%
+        mutate(
+          pct_ini_z = coalesce(pct_ini_z, 0), pct_fim_z = coalesce(pct_fim_z, 0),
+          nova  = is.na(var_rel) & pct_ini_z == 0 & pct_fim_z >= 1 &
+                  as.character(classe_n2) != "Outros usos",
+          faixa = case_when(
+            nova           ~ "G5",                        # classe surgida: ganho > 200%
+            is.na(var_rel) ~ "SD",
+            var_rel < 0    ~ paste0("P", pmax(1, findInterval(-var_rel, FAIXAS_PERDA, left.open = TRUE))),
+            TRUE           ~ paste0("G", pmax(1, findInterval(var_rel, FAIXAS_GANHO, left.open = TRUE)))),
+          faixa  = factor(faixa, levels = NIVEIS_FX),
+          rotulo = case_when(nova ~ "nova", faixa == "SD" ~ "s.d.", TRUE ~ coalesce(rotulo, "")),
+          cor_texto = if_else(faixa == "SD", "grey45", .cor_texto_contraste(CORES_FX[as.character(faixa)])))
+      # Mesma ordem de unidades das sínteses S1–S4
+      if (exists(".ordem_unidades"))
+        df_delta <- df_delta %>%
+          mutate(unidade_analise = factor(as.character(unidade_analise),
+                                          levels = rev(.ordem_unidades(unidade_analise))))
+
+      p_hm <- ggplot(df_delta, aes(x = classe_n2, y = unidade_analise, fill = faixa)) +
         geom_tile(color = "white", linewidth = 0.35) +
-        geom_text(data = df_delta %>% filter(nzchar(rotulo)),
-                  aes(label = rotulo, color = cor_texto),
-                  size = 3.0, fontface = "bold") +
+        geom_text(aes(label = rotulo, color = cor_texto,
+                      fontface = if_else(faixa == "SD", "plain", "bold")),
+                  size = .mm(2.8)) +
         scale_color_identity() +
-        scale_fill_stepsn(
-          colours = c("#7f0000","#c0392b","#e07b74","#f5d5d2",
-                      "#d2eeda","#74c493","#2e7d32","#145a32"),
-          breaks  = c(-10, -5, -2.5, 0, 2.5, 5, 10),
-          limits  = c(-max(lim_delta, 10.01), max(lim_delta, 10.01)),
-          na.value = "white",
-          name    = paste0("\u0394 pp\n(", ano_ini_hm, "\u2192", ano_fim_hm, ")"),
-          labels  = label_number(accuracy = 0.1, decimal.mark = ",", suffix = " pp"),
-          guide   = guide_colorsteps(barheight = unit(6,"cm"),
-                                     barwidth   = unit(0.5,"cm"),
-                                     show.limits = TRUE)
-        ) +
-        labs(
-          title    = str_wrap(paste0("Heatmap de Mudança — Delta de Cobertura da Terra por Unidade e Classe  (",
-                                     ano_ini_hm, " → ", ano_fim_hm, ")"), width = 80),
-          subtitle = paste0("Cor = delta absoluto (pontos percentuais)  |  ",
-                            "Rótulo = variação relativa (%)  |  ",
-                            "Vermelho = perda  |  Verde = ganho  |  ",
-                            "Classes < 1% agrupadas em 'Outros usos'"),
-          x = NULL, y = NULL,
-          caption = CAPTION_PADRAO
-        ) +
-        # Wrap nos labels do eixo X para evitar corte
+        scale_fill_manual(values = CORES_FX, guide = "none", drop = FALSE) +
         scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
         scale_y_discrete(labels = function(x) .quebrar(x, LARGURA_EIXO)) +
-        theme_minimal(base_size = 11) +
-        theme(
-          plot.title      = element_text(face = "bold", size = 12, hjust = 0,
-                                         lineheight = 1.1),
-          plot.subtitle   = element_text(color = "grey50", size = 8.5, hjust = 0),
-          plot.caption    = element_text(color = "grey55", size = 7, hjust = 1),
-          axis.text.x     = element_text(angle = 35, hjust = 1, size = 9,
+        labs(x = NULL, y = NULL) +
+        theme_minimal(base_size = .pt(11)) +
+        # hjust = vjust = 1: o fim do rótulo inclinado cai exatamente sob a coluna
+        theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = .pt(9),
                                          lineheight = 0.9),
-          axis.text.y     = element_text(size = 9.5, lineheight = 0.9),
-          legend.position = "right",
-          plot.margin     = margin(8, 12, 6, 10)
-        )
+              axis.text.y = element_text(size = .pt(9.5), lineheight = 0.9),
+              panel.grid  = element_blank(),
+              plot.margin = margin(4, 12, 2, 10))
+
+      # Faixa de legenda (embaixo): 5 tons de perda | sem dado | 5 tons de ganho
+      leg <- data.frame(faixa = factor(NIVEIS_FX, levels = NIVEIS_FX), x = c(1:5, 6.25, 7.5:11.5),
+                        rot = sub(" a ", "\na ", c(rev(ROT_PERDA), "Sem dado", ROT_GANHO)))
+      leg$rot[leg$faixa == "SD"] <- "Sem\ndado"
+      leg$cor_txt <- if_else(leg$faixa == "SD", "grey25", .cor_texto_contraste(CORES_FX[as.character(leg$faixa)]))
+      p_leg <- ggplot(leg, aes(x = x, y = 1, fill = faixa)) +
+        geom_tile(width = c(rep(1, 5), 1.3, rep(1, 5)), height = 0.95, color = "white", linewidth = 0.6) +
+        geom_text(aes(label = rot, color = cor_txt), size = .mm(2.4), lineheight = 0.85) +
+        annotate("text", x = 3, y = 1.75, label = "Perda relativa (%)", size = .mm(2.8),
+                 fontface = "bold", color = CORES_PERDA[4]) +
+        annotate("text", x = 9.5, y = 1.75, label = "Ganho relativo (%)", size = .mm(2.8),
+                 fontface = "bold", color = CORES_GANHO[4]) +
+        scale_fill_manual(values = CORES_FX, guide = "none") +
+        scale_color_identity() +
+        # Sem margem lateral (o patchwork a repetiria no heatmap e o
+        # estreitaria): a faixa é centralizada pela própria escala x.
+        coord_cartesian(xlim = c(0.45, 12.05), ylim = c(0.5, 2.05), clip = "off") +
+        theme_void() +
+        theme(plot.margin = margin(2, 0, 4, 0))
+
+      (p_hm / p_leg) +
+        plot_layout(heights = c(1, 0.13)) +
+        plot_annotation(
+          title    = .quebrar(paste0("Variação relativa da participação das classes de cobertura e ",
+                                     "uso da terra por unidade de análise (", ano_ini_hm, "–",
+                                     ano_fim_hm, ")")),
+          subtitle = paste0("Cor e rótulo: variação relativa da participação de cada classe na área ",
+                            "da unidade (%); \"nova\": classe ausente em ", ano_ini_hm, "; \"s.d.\": ",
+                            "sem dado (classe com menos de 1% nos dois anos ou ausente na unidade); ",
+                            "classes com menos de 1% agrupadas em \"Outros usos\""),
+          caption  = CAPTION_PADRAO,
+          theme = theme(plot.title = element_text(face = "bold", size = .tit(12), hjust = 0,
+                                                  lineheight = 1.05),
+                        plot.title.position = "plot",
+                        plot.subtitle = element_text(color = "grey50", size = .pt(8.5), hjust = 0),
+                        plot.caption  = element_text(color = "grey55", size = .pt(7), hjust = 1)))
     }
     
     # ---- D: Dispersão — Cobertura Natural × Antrópica ----
@@ -2019,7 +2331,7 @@ if (GERAR_MULTIVAR) {
       # Identificador curto para o gráfico
       .id_curto_d <- function(x) {
         m <- regmatches(x, regexpr("^[IVXivx]+[ab]?(?=\\s|-|$)", x, perl=TRUE))
-        if (length(m) == 0 || !nzchar(m)) substr(x, 1, 4) else m
+        if (length(m) == 0 || !nzchar(m)) .iniciais(x) else m
       }
       df_disp <- df_disp %>%
         mutate(id_curto = sapply(as.character(unidade_analise), .id_curto_d))
@@ -2057,20 +2369,20 @@ if (GERAR_MULTIVAR) {
         # Pontos 1985 — círculo com preenchimento pastel (fill) e borda cor cheia
         geom_point(data=df_1985,
                    aes(x=Natural, y=Antropico, color=unidade_analise),
-                   shape=21, size=4.5, stroke=1.4,
+                   shape=21, size=.sz(4.5), stroke=.sz(1.4),
                    fill=adjustcolor(cor_unid[df_1985$unidade_analise], alpha.f=0.25),
                    show.legend=FALSE) +
         # Pontos 2024 — círculo cheio, cor plena
         geom_point(data=df_2024,
                    aes(x=Natural, y=Antropico, color=unidade_analise),
-                   shape=19, size=4.5, show.legend=TRUE) +
+                   shape=19, size=.sz(4.5), show.legend=TRUE) +
         # Rótulo: id_curto em 1985 (abaixo) e 2024 (acima)
         geom_text(data=df_1985,
                   aes(x=Natural, y=Antropico, label=paste0(id_curto, "'", substr(a_ini_d, 3, 4)), color=unidade_analise),
-                  size=2.8, fontface="bold", vjust=2.4, show.legend=FALSE) +
+                  size = .mm(2.8), fontface="bold", vjust=2.4, show.legend=FALSE) +
         geom_text(data=df_2024,
                   aes(x=Natural, y=Antropico, label=paste0(id_curto, "'", substr(a_fim_d, 3, 4)), color=unidade_analise),
-                  size=2.8, fontface="bold", vjust=-1.6, show.legend=FALSE) +
+                  size = .mm(2.8), fontface="bold", vjust=-1.6, show.legend=FALSE) +
         scale_color_manual(
           values = cor_unid,
           name   = NULL,
@@ -2078,8 +2390,9 @@ if (GERAR_MULTIVAR) {
                             leg_disp$unidade_analise)
         ) +
         guides(color = guide_legend(
-          nrow = ceiling(n_unid/3),
-          override.aes = list(shape=19, size=4)
+          ncol = if (ABNT) 2 else NULL,
+          nrow = if (ABNT) NULL else ceiling(n_unid/3),
+          override.aes = list(shape=19, size=.sz(4))
         )) +
         scale_x_continuous(
           labels=label_number(accuracy=0.1, decimal.mark=",", suffix="%"),
@@ -2090,13 +2403,11 @@ if (GERAR_MULTIVAR) {
           expand=expansion(mult=c(0.10,0.10))
         ) +
         labs(
-          title    = str_wrap(paste0("Trajetória de Cobertura — Cobertura Natural × Antrópica  (",
-                                     a_ini_d," → ",a_fim_d,")"), width=75),
-          subtitle = paste0("Seta = trajetória por unidade (quanto mais clara, mais tênue a mudança)  |  ",
-                            "○ = ", a_ini_d, " (pastel)   |   ● = ", a_fim_d, " (cheio)
-",
-                            "Natural: Floresta + Form. Natural não Florestal  |  ",
-                            "Antrópico: Agropecuária + Área Não Vegetada"),
+          title    = .quebrar(paste0("Trajetória da cobertura natural e antrópica por unidade de ",
+                                     "análise (", a_ini_d, "–", a_fim_d, ")")),
+          subtitle = paste0("Círculo vazado: ", a_ini_d, "; círculo cheio: ", a_fim_d,
+                            "; seta: trajetória da unidade. Natural: Floresta e Vegetação ",
+                            "Herbácea e Arbustiva; antrópica: Agropecuária e Área não Vegetada"),
           x="Cobertura Natural (%)", y="Cobertura Antrópica (%)",
           caption=CAPTION_PADRAO
         ) +
@@ -2105,8 +2416,8 @@ if (GERAR_MULTIVAR) {
         theme(
           panel.grid      = element_line(color="grey93", linewidth=0.3),
           legend.position = "bottom",
-          legend.text     = element_text(size=8.5, lineheight=0.9),
-          legend.key.size = unit(0.8,"cm")
+          legend.text     = element_text(size = .pt(8.5), lineheight=0.9),
+          legend.key.size = unit(if (ABNT) 0.45 else 0.8,"cm")
         )
     }
     
@@ -2137,16 +2448,12 @@ if (GERAR_MULTIVAR) {
       
       if (nrow(df_mb) == 0) { message("  [E] Matriz bolhas: sem dados."); return(NULL) }
       
-      # Limiar mínimo configurável: ignora transições < 0.1% da área total
       area_total_mb <- sum(df_mb$area_ha)
-      LIMIAR_BOLHA  <- area_total_mb * 0.001   # 0.1% da área total
-      df_mb <- df_mb %>% filter(area_ha >= LIMIAR_BOLHA)
-      
-      # Agregar classes < 1% (em relação ao total) em "Outros usos"
-      .area_classe <- df_mb %>%
-        group_by(orig_n2) %>% summarise(tot = sum(area_ha), .groups = "drop") %>%
-        mutate(pct = tot / area_total_mb * 100)
-      .pequenas_mb <- .area_classe %>% filter(pct < 1) %>% pull(orig_n2)
+
+      # 1) Classes < 1% da paisagem NOS DOIS ANOS -> "Outros usos".
+      #    (Olhar só a origem escondia classes que cresceram — ex.: uma
+      #    silvicultura de 0,7% em 1985 e 2,3% em 2024.)
+      .pequenas_mb <- .classes_pequenas(df_mb, 1)
       df_mb <- df_mb %>%
         mutate(
           orig_n2 = if_else(orig_n2 %in% .pequenas_mb, "Outros usos", orig_n2),
@@ -2154,21 +2461,29 @@ if (GERAR_MULTIVAR) {
         ) %>%
         group_by(orig_n2, dest_n2) %>%
         summarise(area_ha = sum(area_ha, na.rm = TRUE), .groups = "drop")
+
+      # 2) Transições exibidas: >= 0,1% da paisagem OU >= 1% da área da
+      #    classe de origem (mesma leitura da matriz em % da origem). Só o
+      #    corte pela paisagem ocultava transições relevantes de classes
+      #    menores (ex.: Formação Savânica -> Mineração, 4% da origem).
+      df_mb <- df_mb %>%
+        group_by(orig_n2) %>% mutate(pct_origem = area_ha / sum(area_ha) * 100) %>% ungroup() %>%
+        filter(area_ha >= area_total_mb * 0.001 | pct_origem >= 1)
       
       # Classificar origem e destino como Natural ou Antrópico
       .nomes_naturais_mb <- c(
         "Formação Florestal","Formacao Florestal","Floresta",
         "Formação Savânica","Formacao Savanica","Savana",
         "Formação Campestre","Formacao Campestre","Campo",
-        "Mangue","Apicum","Campo Alagado e Área Pantanosa",
+        "Mangue","Apicum","Campo Alagado e Área Pantanosa","Floresta Alagável",
         "Restinga Arbórea","Restinga Herbácea",
         "Restinga Arborea","Restinga Herbacea",
         "Afloramento Rochoso","Rio, Lago e Oceano","Corpo Dagua"
       )
       df_mb <- df_mb %>%
         mutate(
-          nat_orig = orig_n2 %in% .nomes_naturais_mb,
-          nat_dest = dest_n2 %in% .nomes_naturais_mb,
+          nat_orig = .norm(orig_n2) %in% .norm(.nomes_naturais_mb),
+          nat_dest = .norm(dest_n2) %in% .norm(.nomes_naturais_mb),
           tipo_eco = case_when(
             orig_n2 == dest_n2 &  nat_orig ~ "Manutenção Natural",
             orig_n2 == dest_n2 & !nat_orig ~ "Manutenção Antrópica",
@@ -2224,7 +2539,11 @@ if (GERAR_MULTIVAR) {
       
       ggplot(df_mb, aes(x = dest_n2, y = orig_n2)) +
         # Sem fundo de cor na diagonal
-        geom_point(aes(size = faixa_pct, color = tipo_eco), alpha = 0.88) +
+        # Camada invisível só para a legenda de tamanho: com cor fixa, o
+        # ggplot desenha a chave de todas as faixas, inclusive as sem dados.
+        geom_point(aes(size = faixa_pct), color = "grey40", alpha = 0, show.legend = TRUE) +
+        geom_point(aes(size = faixa_pct, color = tipo_eco), alpha = 0.88,
+                   show.legend = c(size = FALSE, colour = TRUE)) +
         # Rótulo em ha acima da bolha — vjust dinâmico por tamanho de faixa
         geom_text(
           aes(label = rot_ha,
@@ -2235,11 +2554,13 @@ if (GERAR_MULTIVAR) {
                 TRUE                   ~ -1.2
               )),
           hjust = 0.5,
-          size  = 2.4, fontface = "bold", color = "grey10"
+          size = .mm(2.4), fontface = "bold", color = "grey10"
         ) +
         scale_size_manual(
-          values = c("< 2,5%" = 5, "2,5–5%" = 10, "5–10%" = 16, "> 10%" = 24),
-          name   = "% da paisagem",
+          values = c("< 2,5%" = .sz(5), "2,5–5%" = .sz(10), "5–10%" = .sz(16), "> 10%" = .sz(24)),
+          name   = "Área transicionada\n(tamanho: % da paisagem;\nrótulos: hectares)",
+          # limits (e não só breaks): faixas sem dados também aparecem na legenda
+          limits = c("< 2,5%", "2,5–5%", "5–10%", "> 10%"),
           breaks = c("< 2,5%", "2,5–5%", "5–10%", "> 10%"),
           drop   = FALSE
         ) +
@@ -2255,14 +2576,18 @@ if (GERAR_MULTIVAR) {
           name   = "Tipo de transição",
           drop   = FALSE
         ) +
+        # Um único bloco de legenda: tamanhos (2 × 2) ao lado dos tipos (1 coluna)
+        guides(size  = guide_legend(order = 1, nrow = 2, byrow = TRUE, title.position = "top",
+                                    override.aes = list(alpha = 1)),
+               color = guide_legend(order = 2, ncol = 1, title.position = "top",
+                                    override.aes = list(size = .sz(5)))) +
         labs(
-          title    = .quebrar(paste0("Matriz de Transição de Cobertura — ", rec_geral,
-                                     "  (", ANO_INI, " → ", ANO_FIM, ")"), LARGURA_TITULO),
-          subtitle = paste0("Cada bolha = área (ha) transicionada  |  Diagonal (verde) = manutenção  |  ",
-                            "Fora da diagonal (vermelho) = conversão
-",
-                            paste0("Classes < 1% da area total agrupadas em 'Outros usos'  |  "),
-                            "Rótulo = ha (bolhas > 5% do máximo)"),
+          title    = .quebrar(paste0("Matriz de transição da cobertura e uso da terra (",
+                                     ANO_INI, "–", ANO_FIM, ") – ", rec_geral), LARGURA_TITULO),
+          subtitle = paste0("Tamanho da bolha: faixa de área transicionada (% da paisagem); rótulo: ",
+                            "área (ha); diagonal: permanência na mesma classe; exibidas as transições ",
+                            "com ao menos 0,1% da paisagem ou 1% da classe de origem; classes com ",
+                            "menos de 1% da área nos dois anos agrupadas em \"Outros usos\""),
           x = paste0("Destino (", ANO_FIM, ")"),
           y = paste0("Origem (", ANO_INI, ")"),
           caption = CAPTION_PADRAO
@@ -2270,15 +2595,18 @@ if (GERAR_MULTIVAR) {
         coord_cartesian(clip = "off") +
         tema_amp +
         theme(
-          axis.text.x     = element_text(angle = 45, hjust = 1, size = 7.5,
+          axis.text.x     = element_text(angle = 45, hjust = 1, vjust = 1, size = .pt(7.5),
                                          lineheight = 0.85),
-          axis.text.y     = element_text(size = 8.5),
+          axis.text.y     = element_text(size = .pt(8.5)),
           panel.grid      = element_line(color = "grey92", linewidth = 0.3),
           legend.position  = "bottom",
-          legend.box       = "vertical",
+          legend.box       = "horizontal",
+          legend.box.just  = "top",           # as duas legendas alinhadas pelo topo
+          legend.title     = element_text(size = .pt(8.5), face = "bold", lineheight = 1.05),
+          legend.spacing.x = unit(0.8, "cm"),
           legend.spacing.y = unit(0.15, "cm"),
-          legend.key.size  = unit(0.8, "cm"),
-          legend.text      = element_text(size = 8.5),
+          legend.key.size  = unit(0.45, "cm"),
+          legend.text      = element_text(size = .pt(8.5)),
           plot.title       = element_text(lineheight = 1.1),
           plot.margin      = margin(12, 16, 16, 12)
         )
@@ -2341,22 +2669,24 @@ if (GERAR_MULTIVAR) {
                                              decimal.mark = ","), "%"),
                        x = delta_pp),
                    hjust = 0.5, vjust = 0.5,
-                   size = 2.6, fontface = "bold", color = "grey15",
+                   size = .mm(2.6), fontface = "bold", color = "grey15",
                    fill = alpha("white", 0.82),
                    linewidth = 0.3, label.padding = unit(0.06, "lines")) +
-        scale_fill_manual(values = c("Ganho" = "#1a7a3c", "Perda" = "#c0392b"),
+        # Mesmas cores de ganho/perda do painel H (azul/laranja): o verde e o
+        # vermelho ficam reservados à manutenção/alteração do painel b).
+        scale_fill_manual(values = c("Ganho" = "#2980b9", "Perda" = "#e67e22"),
                           guide = "none") +
         scale_x_continuous(
-          labels = label_number(accuracy = 0.1, decimal.mark = ",", suffix = " pp")
+          labels = label_number(accuracy = 0.1, decimal.mark = ",", suffix = " p.p."),
+          expand = expansion(mult = 0.12)
         ) +
-        labs(title = "Delta de Cobertura",
-             subtitle = paste0(a_ini, " → ", a_fim,
-                               "  |  Rótulo = variação relativa (%)"),
-             x = "Δ pontos percentuais", y = NULL) +
-        theme_minimal(base_size = 10) +
-        theme(plot.title    = element_text(face = "bold", size = 10, hjust = 0),
-              plot.subtitle = element_text(size = 8, color = "grey50"),
-              axis.text.y   = element_text(size = 8.5),
+        labs(title = "a) Variação líquida da participação",
+             subtitle = "Rótulo: variação relativa (%)",
+             x = "Variação (p.p.)", y = NULL) +
+        theme_minimal(base_size = .pt(10)) +
+        theme(plot.title    = element_text(face = "bold", size = .pt(10), hjust = 0),
+              plot.subtitle = element_text(size = .pt(8), color = "grey50"),
+              axis.text.y   = element_text(size = .pt(8.5)),
               panel.grid.major.y = element_blank())
       
       # -- Lado direito: manutenção × alteração por classe (barras 100%)
@@ -2402,11 +2732,11 @@ if (GERAR_MULTIVAR) {
         geom_rect(aes(xmin = x_ini, xmax = x_fim,
                       ymin = y_num - 0.36, ymax = y_num + 0.36, fill = tipo),
                   color = "grey40", linewidth = 0.15) +
-        geom_label(data = df_alt_u %>% filter(pct_tipo >= 7),
+        geom_label(data = df_alt_u %>% filter(pct_tipo >= if (ABNT) 14 else 7),
                    aes(x = x_meio, y = y_num,
                        label = paste0(number(pct_tipo, accuracy = 0.1,
                                              decimal.mark = ","), "%")),
-                   size = 2.6, fontface = "bold", color = "grey15",
+                   size = .mm(2.6), fontface = "bold", color = "grey15",
                    fill = alpha("white", 0.80),
                    linewidth = 0.3, label.padding = unit(0.06, "lines")) +
         scale_fill_manual(
@@ -2424,12 +2754,12 @@ if (GERAR_MULTIVAR) {
           breaks = c(0, 25, 50, 75, 100), expand = expansion(mult = c(0, 0.02))
         ) +
         coord_cartesian(xlim = c(0, 100)) +
-        labs(title    = "Manutenção × Alteração",
-             subtitle = "% da área original de cada classe",
-             x = "% da área de origem", y = NULL) +
-        theme_minimal(base_size = 10) +
-        theme(plot.title    = element_text(face = "bold", size = 10, hjust = 0),
-              plot.subtitle = element_text(size = 8, color = "grey50"),
+        labs(title    = "b) Manutenção × alteração",
+             subtitle = "Percentual da área de origem de cada classe",
+             x = "Área de origem (%)", y = NULL) +
+        theme_minimal(base_size = .pt(10)) +
+        theme(plot.title    = element_text(face = "bold", size = .pt(10), hjust = 0),
+              plot.subtitle = element_text(size = .pt(8), color = "grey50"),
               axis.text.y   = element_blank(),
               panel.grid.major.y = element_blank(),
               legend.position = "bottom",
@@ -2442,17 +2772,18 @@ if (GERAR_MULTIVAR) {
       (p_esq | p_dir) +
         plot_layout(widths = c(1.2, 1), guides = "collect") +
         plot_annotation(
-          title    = .quebrar(paste0("Dinâmica de Cobertura — ",
+          title    = .quebrar(paste0("Dinâmica da cobertura e uso da terra por classe (",
+                                     ANO_INI, "–", ANO_FIM, ") – ",
                                      gsub("_"," ", unidade_nome)), LARGURA_TITULO),
-          subtitle = paste0("Esq.: variação líquida por classe (pp)  |  ",
-                            "Dir.: proporção mantida × convertida por classe  |  ",
-                            ANO_INI, " → ", ANO_FIM),
+          subtitle = paste0("a) variação líquida da participação na área total, em pontos ",
+                            "percentuais (p.p.); b) proporção da área de cada classe em ",
+                            ANO_INI, " mantida ou convertida em ", ANO_FIM),
           caption  = CAPTION_PADRAO,
           theme    = theme(
-            plot.title    = element_text(face = "bold", size = 13, hjust = 0,
+            plot.title    = element_text(face = "bold", size = .tit(13), hjust = 0,
                                          lineheight = 1.1),
-            plot.subtitle = element_text(color = "grey45", size = 9),
-            plot.caption  = element_text(color = "grey55", size = 7, hjust = 1),
+            plot.subtitle = element_text(color = "grey45", size = .pt(9)),
+            plot.caption  = element_text(color = "grey55", size = .pt(7), hjust = 1),
             plot.margin   = margin(10, 14, 8, 12),
             legend.position = "bottom"
           )
@@ -2472,11 +2803,9 @@ if (GERAR_MULTIVAR) {
       
       if (nrow(df_su) == 0) return(NULL)
       
-      # Agregar classes < 1% da área total → "Outros usos"
-      tot_su <- sum(df_su$area_ha)
-      .peq_su <- df_su %>%
-        group_by(orig_n2) %>% summarise(t = sum(area_ha), .groups="drop") %>%
-        mutate(p = t/tot_su*100) %>% filter(p < 2) %>% pull(orig_n2)
+      # Agregar classes < 2% da área total NOS DOIS ANOS → "Outros usos"
+      # (só a origem escondia classes que cresceram, como a silvicultura)
+      .peq_su <- .classes_pequenas(df_su, 2)
       df_su <- df_su %>%
         mutate(orig_n2 = if_else(orig_n2 %in% .peq_su, "Outros usos", orig_n2),
                dest_n2 = if_else(dest_n2 %in% .peq_su, "Outros usos", dest_n2)) %>%
@@ -2489,40 +2818,71 @@ if (GERAR_MULTIVAR) {
       cores_su <- setNames(.n2nome_para_cor(orig_all), orig_all)
       cores_su["Outros usos"] <- "#aaaaaa"
       
+      # Classes com menos de LIMIAR_ROT_SANKEY da área têm bloco baixo
+      # demais para o texto: o rótulo vai para FORA da barra (à esquerda
+      # em ANO_INI, à direita em ANO_FIM), com linha de chamada e
+      # afastamento automático entre rótulos vizinhos (ggrepel).
+      LIMIAR_ROT_SANKEY <- 0.045
+      larg_su <- if (ABNT) 0.42 else 1/3   # blocos largos: o nome cabe em 2 linhas
+      tot_su  <- sum(df_su$area_ha)
+      .rot_su <- function(stratum, prop)
+        paste0(str_wrap(stratum, 16), "\n(",
+               number(prop * 100, accuracy = 0.1, decimal.mark = ","), "%)")
+      .rot_externo <- function(lado, nudge, hjust)
+        ggrepel::geom_text_repel(
+          stat = "stratum",
+          aes(label = ifelse(after_stat(prop) < LIMIAR_ROT_SANKEY & after_stat(x) == lado,
+                             .rot_su(after_stat(stratum), after_stat(prop)), "")),
+          nudge_x = nudge, hjust = hjust, direction = "y", size = .mm(2.3),
+          fontface = "bold", color = "grey20", segment.color = "grey50",
+          segment.size = 0.3, min.segment.length = 0, box.padding = 0.15,
+          lineheight = 0.85, max.overlaps = Inf, seed = 1,
+          ylim = c(0, tot_su))     # rótulos não passam da altura do diagrama
+
       ggplot(df_su,
              aes(axis1 = orig_n2, axis2 = dest_n2, y = area_ha)) +
-        ggalluvial::geom_alluvium(aes(fill = orig_n2), alpha = 0.78, width = 1/4) +
-        ggalluvial::geom_stratum(width = 1/4, fill = "grey92",
+        ggalluvial::geom_alluvium(aes(fill = orig_n2), alpha = 0.78, width = larg_su) +
+        ggalluvial::geom_stratum(width = larg_su, fill = "grey92",
                                  color = "grey55", linewidth = 0.3) +
         # Rótulo do stratum: nome da classe + % no respectivo ano
         geom_text(stat = "stratum",
-                  aes(label = paste0(after_stat(stratum), "\n(",
-                                     number(after_stat(prop)*100,
-                                            accuracy=0.1, decimal.mark=","), "%)")),
-                  size = 2.3, fontface = "bold", color = "grey20",
+                  aes(label = ifelse(after_stat(prop) >= LIMIAR_ROT_SANKEY,
+                                     paste0(str_wrap(after_stat(stratum), 16), "\n(",
+                                            number(after_stat(prop)*100,
+                                                   accuracy=0.1, decimal.mark=","), "%)"),
+                                     "")),
+                  size = .mm(2.3), fontface = "bold", color = "grey20",
                   lineheight = 0.85) +
+        # Moldura fechando o diagrama (blocos + fluxos), inclusive no topo
+        annotate("rect", xmin = 1 - larg_su / 2, xmax = 2 + larg_su / 2,
+                 ymin = 0, ymax = tot_su, fill = NA, color = "grey40", linewidth = 0.5) +
+        # Classes pequenas: rótulo externo (esquerda em ANO_INI, direita em ANO_FIM)
+        .rot_externo(1, -(larg_su / 2 + 0.08), 1) +
+        .rot_externo(2,  (larg_su / 2 + 0.08), 0) +
         scale_fill_manual(values = cores_su, guide = "none") +
         scale_x_discrete(
           limits = c(as.character(ANO_INI), as.character(ANO_FIM)),
-          expand = expansion(add = 0.15)
+          expand = expansion(add = 0.62)
         ) +
-        scale_y_continuous(
-          labels = label_number(big.mark = ".", decimal.mark = ",", suffix = " ha")
-        ) +
+        # Sem eixo vertical: o percentual de cada bloco já comunica a proporção
+        scale_y_continuous(expand = expansion(mult = 0.01)) +
         labs(
-          title    = .quebrar(paste0("Fluxos de Transição — ",
+          title    = .quebrar(paste0("Fluxos de transição entre classes de cobertura e uso da terra (",
+                                     ANO_INI, "–", ANO_FIM, ") – ",
                                      gsub("_"," ", unidade_nome)), min(65, LARGURA_TITULO)),
-          subtitle = paste0("Origem (", ANO_INI, ") → Destino (", ANO_FIM,
-                            ")  |  Espessura ∝ área (ha)  |  Classes < 1% em 'Outros usos'"),
-          x = NULL, y = "Área (ha)", caption = CAPTION_PADRAO
+          subtitle = paste0("Espessura dos fluxos proporcional à área (ha); classes com menos de ",
+                            "2% da área nos dois anos agrupadas em \"Outros usos\"; classes com ",
+                            "menos de 4,5% rotuladas fora da barra"),
+          x = NULL, y = NULL, caption = CAPTION_PADRAO
         ) +
         tema_amp +
-        theme(axis.text.x = element_text(face = "bold", size = 11),
+        theme(axis.text.x = element_text(face = "bold", size = .pt(11)),
+              axis.text.y = element_blank(), axis.ticks.y = element_blank(),
               panel.grid  = element_blank())
     }
     
-    # ---- H: Painel Delta + Sankey por unidade ----
-    .grafico_painel_delta_sankey <- function(unidade_nome) {
+    # ---- H: Variação líquida da participação por unidade ----
+    .grafico_variacao_liquida <- function(unidade_nome) {
       # Lado esquerdo: barras de delta (reutiliza lógica do painel G)
       df_cob_h <- cobertura %>%
         filter(as.character(unidade_analise) == as.character(unidade_nome),
@@ -2571,50 +2931,216 @@ if (GERAR_MULTIVAR) {
                    aes(label=paste0(if_else(var_rel>0,"+",""),
                                     number(var_rel,accuracy=0.1,decimal.mark=","),"%"),
                        x=delta_pp),
-                   hjust=0.5, size=2.5, fontface="bold", color="grey15",
+                   hjust=0.5, size = .mm(2.5), fontface="bold", color="grey15",
                    fill=alpha("white",0.82), linewidth=0.3,
                    label.padding=unit(0.06,"lines")) +
         scale_fill_manual(values=c("Ganho"="#2980b9","Perda"="#e67e22"),
                           guide="none") +
         scale_x_continuous(labels=label_number(accuracy=0.1,decimal.mark=",",
-                                               suffix=" pp")) +
-        labs(title="Delta de Cobertura",
-             subtitle=paste0(a_ini_h," → ",a_fim_h,
-                             "  |  Rótulo = variação relativa (%)"),
-             x="Δ pontos percentuais", y=NULL) +
-        theme_minimal(base_size=10) +
-        theme(plot.title=element_text(face="bold",size=10),
-              plot.subtitle=element_text(size=8,color="grey50"),
-              axis.text.y=element_text(size=8.5),
-              panel.grid.major.y=element_blank())
-      
-      # Lado direito: Sankey da unidade
-      p_h_dir <- tryCatch(.grafico_sankey_unidade(unidade_nome),
-                          error=function(e) NULL)
-      if (is.null(p_h_dir)) return(NULL)
-      
-      # Remover caption e título do Sankey (já estão no plot_annotation)
-      p_h_dir <- p_h_dir +
-        labs(title=NULL, subtitle=NULL, caption=NULL) +
-        theme(plot.margin=margin(4,8,4,4))
-      
-      (p_h_esq | p_h_dir) +
-        plot_layout(widths=c(1, 1.4)) +
-        plot_annotation(
-          title    = .quebrar(paste0("Delta × Fluxos de Transição — ",
-                                     gsub("_"," ",unidade_nome)), LARGURA_TITULO),
-          subtitle = paste0("Esq.: variação líquida por classe (pp)  |  ",
-                            "Dir.: fluxos Sankey de transição  |  ",
-                            ANO_INI," → ",ANO_FIM),
-          caption  = CAPTION_PADRAO,
-          theme    = theme(
-            plot.title   =element_text(face="bold",size=13,hjust=0,lineheight=1.1),
-            plot.subtitle=element_text(color="grey45",size=9),
-            plot.caption =element_text(color="grey55",size=7,hjust=1),
-            plot.margin  =margin(10,14,8,12))
-        )
+                                               suffix=" p.p."),
+                           expand=expansion(mult=0.12)) +
+        labs(title    = .quebrar(paste0("Variação líquida da participação das classes de cobertura ",
+                                         "e uso da terra (", a_ini_h, "–", a_fim_h, ") – ",
+                                         gsub("_"," ",unidade_nome)), LARGURA_TITULO),
+             subtitle = paste0("Barras: variação da participação na área total, em pontos ",
+                               "percentuais (p.p.); rótulo: variação relativa (%); classes com ",
+                               "menos de 1% agrupadas em \"Outros usos\""),
+             x = "Variação (p.p.)", y = NULL, caption = CAPTION_PADRAO) +
+        tema_amp +
+        theme(axis.text.y = element_text(size = .pt(10)),
+              panel.grid.major.x = element_line(color = "grey90", linewidth = 0.3),
+              panel.grid.major.y = element_blank())
+      # O Sankey da unidade é gerado à parte (E2): lado a lado ou empilhado
+      # com estas barras, nenhum dos dois ficava legível.
+      p_h_esq
     }
     
+    # ---- S: Sínteses entre unidades (unidade × classe) ----
+    # S1: matriz de bolhas da variação líquida (p.p.)
+    # S2: um painel por classe, barras = unidades (variação líquida, p.p.)
+    # S3: permanência — % da área de cada classe em ANO_INI mantida em ANO_FIM
+    # S4: combinação S1 + S3 (mesma grade de unidades e classes)
+
+    # Sigla curta da unidade: numeral romano do início do nome ou iniciais
+    .id_unidade <- function(x) {
+      m <- regmatches(x, regexpr("^[IVXivx]+[ab]?(?=\\s|-|$)", x, perl = TRUE))
+      if (length(m) == 0 || !nzchar(m)) .iniciais(x) else m
+    }
+    # Ordem das unidades: numeral romano (I, Ia, Ib, II...), depois as demais
+    # em ordem alfabética, e o recorte completo ("Shape Completo") por último
+    .ordem_unidades <- function(nomes) {
+      nomes <- unique(as.character(nomes))
+      ids   <- vapply(nomes, .id_unidade, "")
+      rom   <- suppressWarnings(as.integer(utils::as.roman(sub("[AB]$", "", toupper(ids)))))
+      ok    <- grepl("^[IVX]+[AB]?$", toupper(ids)) & !is.na(rom)
+      chave <- ifelse(ok, sprintf("0%03d%s", rom, tolower(sub("^[IVXivx]+", "", ids))),
+                      paste0("1", tolower(nomes)))
+      # área total por último (nome padrão ou o escolhido no plugin)
+      chave[.norm(nomes) == "shape completo" |
+            nomes %in% get0("NOME_AREA_TOTAL", ifnotfound = character(0))] <- "9"
+      nomes[order(chave)]
+    }
+
+    .dados_sintese <- function() {
+      base <- cobertura %>%
+        filter(cod_classe != 255) %>%
+        mutate(classe = .cod_para_n2nome(cod_classe), pct = percentual * 100,
+               ano = as.character(round(as.numeric(ano)))) %>%
+        group_by(unidade_analise, ano, classe) %>%
+        summarise(pct = sum(pct, na.rm = TRUE), .groups = "drop")
+      # classes < 1% em todas as unidades e anos -> "Outros usos"
+      peq <- base %>% group_by(classe) %>% summarise(mx = max(pct), .groups = "drop") %>%
+        filter(mx < 1) %>% pull(classe)
+      base <- base %>%
+        mutate(classe = if_else(classe %in% peq, "Outros usos", classe)) %>%
+        group_by(unidade_analise, ano, classe) %>%
+        summarise(pct = sum(pct), .groups = "drop")
+      a1 <- as.character(ANO_INI); a2 <- as.character(ANO_FIM)
+      dv <- base %>% filter(ano %in% c(a1, a2)) %>%
+        pivot_wider(names_from = ano, values_from = pct, values_fill = 0) %>%
+        mutate(delta = .data[[a2]] - .data[[a1]],
+               sinal = if_else(delta >= 0, "Ganho", "Perda"))
+      # classes: dos maiores ganhos médios às maiores perdas; "Outros usos" no fim
+      ord_cl <- dv %>% group_by(classe) %>% summarise(m = mean(delta), .groups = "drop") %>%
+        arrange(desc(m)) %>% pull(classe)
+      ord_cl <- c(setdiff(ord_cl, "Outros usos"), intersect(ord_cl, "Outros usos"))
+      ord_un <- .ordem_unidades(dv$unidade_analise)
+      ids    <- make.unique(vapply(ord_un, .id_unidade, ""), sep = "")
+      ids_map <- setNames(ids, ord_un)
+      # permanência: % da área de cada classe de origem mantida na mesma classe
+      dp <- alt %>%
+        mutate(orig = .cod_para_n2nome(cod_orig), dest = .cod_para_n2nome(cod_dest),
+               orig = if_else(orig %in% ord_cl, orig, "Outros usos"),
+               dest = if_else(dest %in% ord_cl, dest, "Outros usos")) %>%
+        group_by(unidade_analise, orig) %>%
+        summarise(tot = sum(area_ha, na.rm = TRUE),
+                  mant = sum(area_ha[orig == dest], na.rm = TRUE), .groups = "drop") %>%
+        filter(tot > 0) %>%
+        mutate(pct_mant = mant / tot * 100) %>%
+        rename(classe = orig)
+      .fat <- function(df) df %>%
+        mutate(unidade_analise = factor(as.character(unidade_analise), levels = rev(ord_un)),
+               classe = factor(classe, levels = ord_cl),
+               id = factor(ids_map[as.character(unidade_analise)], levels = ids))
+      list(dv = .fat(dv), dp = .fat(dp), a1 = a1, a2 = a2, ord_cl = ord_cl,
+           chave = paste(paste0(ids, " = ", ord_un), collapse = "; "))
+    }
+
+    COR_GANHO_PERDA <- c("Ganho" = "#2980b9", "Perda" = "#e67e22")
+    .num_pp <- function(x) number(x, accuracy = 0.1, decimal.mark = ",", style_positive = "plus")
+    .eixo_classes_topo <- function()
+      scale_x_discrete(position = "top", drop = FALSE,
+                       labels = function(x) str_wrap(x, 14))
+    .tema_sintese <- function()
+      tema_amp +
+      theme(axis.text.x.top = element_text(angle = 40, hjust = 0, vjust = 0,
+                                           size = .pt(9), lineheight = 0.85),
+            axis.text.y = element_text(size = .pt(9), lineheight = 0.9),
+            panel.grid.major.x = element_blank(),
+            legend.position = "bottom",
+            # folga à direita: o nome inclinado da última classe não é cortado
+            plot.margin = margin(6, 28, 6, 6))
+
+    .grafico_S1 <- function(ds, titulo = TRUE) {
+      # scale_size_area: diâmetro (mm) ∝ raiz do valor. O rótulo sobe o raio
+      # da bolha + uma folga, medidos em alturas de texto (unidade do vjust).
+      max_mm <- if (ABNT) 9 else 14
+      txt_mm <- .mm(2.4)
+      dv <- ds$dv %>%
+        mutate(raio_mm = max_mm / 2 * sqrt(abs(delta) / max(abs(delta), na.rm = TRUE)),
+               vj = -(raio_mm + 0.8) / txt_mm - 0.2)
+      ggplot(dv, aes(x = classe, y = unidade_analise)) +
+        geom_point(aes(size = abs(delta), color = sinal), alpha = 0.9) +
+        geom_text(aes(label = .num_pp(delta), vjust = vj), size = txt_mm,
+                  color = "grey15", fontface = "bold") +
+        scale_size_area(max_size = max_mm, guide = "none") +
+        scale_color_manual(values = COR_GANHO_PERDA, name = NULL) +
+        .eixo_classes_topo() +
+        scale_y_discrete(labels = function(x) .quebrar(x, LARGURA_EIXO + 8),
+                         expand = expansion(add = c(0.5, 0.9))) +
+        labs(title = if (titulo) .quebrar(paste0(
+               "Variação líquida da participação das classes de cobertura e uso da terra por ",
+               "unidade de análise (", ds$a1, "–", ds$a2, ")")) else "a) Variação líquida da participação (p.p.)",
+             subtitle = paste0("Tamanho da bolha proporcional à variação, em pontos percentuais ",
+                               "(p.p.); azul indica ganho e laranja, perda"),
+             x = NULL, y = NULL, caption = CAPTION_PADRAO) +
+        .tema_sintese()
+    }
+
+    .grafico_S2 <- function(ds) {
+      n_un <- nlevels(ds$dv$id)
+      ggplot(ds$dv, aes(x = id, y = delta, fill = sinal)) +
+        geom_col(width = 0.7, color = "grey35", linewidth = 0.2) +
+        geom_hline(yintercept = 0, color = "grey30", linewidth = 0.4) +
+        geom_text(aes(label = .num_pp(delta), vjust = if_else(delta >= 0, -0.3, 1.2)),
+                  size = .mm(2.3), color = "grey15") +
+        facet_wrap(~classe, ncol = 3, scales = "free_y", labeller = rotulo_facet) +
+        scale_fill_manual(values = COR_GANHO_PERDA, guide = "none") +
+        scale_y_continuous(expand = expansion(mult = 0.28),
+                           labels = function(x) number(x, accuracy = if (max(abs(x), na.rm = TRUE) < 3) 0.1 else 1,
+                                                       decimal.mark = ",")) +
+        labs(title = .quebrar(paste0("Variação líquida da participação por classe de cobertura e uso ",
+                                     "da terra: comparação entre unidades de análise (",
+                                     ds$a1, "–", ds$a2, ")")),
+             subtitle = paste0("Variação da participação na área total, em pontos percentuais (p.p.); ",
+                               "azul indica ganho e laranja, perda"),
+             x = NULL, y = "Variação (p.p.)",
+             caption = .quebrar(paste0("Unidades: ", ds$chave), if (ABNT) 120 else 160)) +
+        tema_amp +
+        theme(panel.grid.major.y = element_line(color = "grey92", linewidth = 0.3),
+              axis.text.x = element_text(face = "bold", size = .pt(if (n_un > 8) 7 else 8.5),
+                                         angle = if (n_un > 8) 90 else 0,
+                                         vjust = 0.5, hjust = if (n_un > 8) 1 else 0.5),
+              strip.text = element_text(size = .pt(9.5)),
+              plot.caption = element_text(hjust = 0, size = .pt(7.5), color = "grey25",
+                                          lineheight = 1.1))
+    }
+
+    .grafico_S3 <- function(ds, titulo = TRUE) {
+      ggplot(ds$dp, aes(x = classe, y = unidade_analise, fill = pct_mant)) +
+        geom_tile(color = "white", linewidth = 0.6) +
+        geom_text(aes(label = paste0(number(pct_mant, accuracy = 1), "%"),
+                      color = if_else(pct_mant > 60, "white", "grey15")),
+                  size = .mm(2.6), fontface = "bold") +
+        scale_color_identity() +
+        scale_fill_gradient(low = "#fbe3d3", high = "#1a7a3c", limits = c(0, 100),
+                            name = "Área de origem mantida (%)",
+                            guide = guide_colorbar(barwidth = unit(7, "cm"),
+                                                   barheight = unit(0.3, "cm"),
+                                                   title.position = "top")) +
+        .eixo_classes_topo() +
+        scale_y_discrete(labels = function(x) .quebrar(x, LARGURA_EIXO + 8)) +
+        labs(title = if (titulo) .quebrar(paste0(
+               "Permanência das classes de cobertura e uso da terra por unidade de análise (",
+               ds$a1, "–", ds$a2, ")")) else "b) Permanência da área de origem (%)",
+             subtitle = paste0("Percentual da área de cada classe em ", ds$a1,
+                               " que permaneceu na mesma classe em ", ds$a2),
+             x = NULL, y = NULL, caption = CAPTION_PADRAO) +
+        .tema_sintese() +
+        theme(panel.grid = element_blank(),
+              legend.title = element_text(size = .pt(8.5)))
+    }
+
+    .grafico_S4 <- function(ds) {
+      p1 <- .grafico_S1(ds, titulo = FALSE) + labs(subtitle = NULL, caption = NULL) +
+        theme(plot.title = element_text(size = .pt(10), face = "bold"))
+      p3 <- .grafico_S3(ds, titulo = FALSE) + labs(subtitle = NULL, caption = NULL) +
+        theme(plot.title = element_text(size = .pt(10), face = "bold"),
+              axis.text.x.top = element_blank(), axis.ticks.x.top = element_blank())
+      (p1 / p3) + plot_layout(heights = c(1.15, 1)) +
+        plot_annotation(
+          title = .quebrar(paste0("Variação líquida e permanência das classes de cobertura e uso ",
+                                  "da terra por unidade de análise (", ds$a1, "–", ds$a2, ")")),
+          subtitle = paste0("a) variação da participação na área total, em pontos percentuais ",
+                            "(p.p.); b) percentual da área de cada classe em ", ds$a1,
+                            " que permaneceu na mesma classe em ", ds$a2),
+          caption = CAPTION_PADRAO,
+          theme = theme(plot.title = element_text(face = "bold", size = .tit(13), hjust = 0,
+                                                  lineheight = 1.05),
+                        plot.subtitle = element_text(color = "grey45", size = .pt(9)),
+                        plot.caption = element_text(color = "grey55", size = .pt(7), hjust = 1)))
+    }
+
     # ---- F: Chord Diagram ----
     .grafico_chord_mv <- function() {
       cols_alt <- names(alt)
@@ -2670,14 +3196,23 @@ if (GERAR_MULTIVAR) {
           sector <- circlize::get.cell.meta.data("sector.index")
           circlize::circos.text(mean(xlim), ylim[1], sector,
                                 facing = "clockwise", niceFacing = TRUE,
-                                adj = c(0, 0.5), cex = 0.65, font = 2)
+                                adj = c(0, 0.5), cex = if (ABNT) 0.85 else 0.65, font = 2)
         },
         bg.border = NA
       )
-      title(main = .quebrar(paste0("Chord — Transições de Cobertura  |  ", rec_geral,
-                                   "  |  ", ANO_INI, " → ", ANO_FIM)),
-            cex.main = 1, font.main = 2, col.main = "grey20")
-      mtext(CAPTION_PADRAO, side = 1, line = 2, cex = 0.65, col = "grey50")
+      titulo_ch <- paste0("Diagrama de cordas das transições entre classes de cobertura ",
+                          "e uso da terra (", ANO_INI, "–", ANO_FIM, ") – ", rec_geral)
+      if (ABNT) {
+        LEGENDAS_ABNT[["F_chord_transicao"]] <<- list(
+          titulo = titulo_ch,
+          nota   = "Largura das cordas proporcional à área (ha) transicionada da classe de origem para a de destino")
+        if (TITULO_NA_FIGURA_ABNT)
+          title(main = .quebrar(titulo_ch, 60), cex.main = 1.05, font.main = 2,
+                col.main = "grey10", adj = 0)
+      } else {
+        title(main = .quebrar(titulo_ch), cex.main = 1, font.main = 2, col.main = "grey20")
+        mtext(CAPTION_PADRAO, side = 1, line = 2, cex = 0.65, col = "grey50")
+      }
       circlize::circos.clear()
     }
     
@@ -2686,25 +3221,45 @@ if (GERAR_MULTIVAR) {
     message("\n[B] PCA — perfil de cobertura por unidade...")
     p_b <- tryCatch(.grafico_pca_mv(), error = function(e) { message("  ERRO: ", e$message); NULL })
     if (!is.null(p_b)) {
-      salvar_grafico("B_pca_cobertura", p_b, w = 13, h = 7)
+      salvar_grafico("B_pca_cobertura", p_b, w = 13, h = 7, h_abnt = 17)
     }
 
     message("[C] Heatmap — unidades x classes...")
     p_c <- tryCatch(.grafico_heatmap_mv(), error = function(e) { message("  ERRO: ", e$message); NULL })
     if (!is.null(p_c)) {
-      salvar_grafico("C_heatmap_cobertura", p_c, w = 14, h = 6.5)
+      salvar_grafico("C_heatmap_cobertura", p_c, w = 14, h = 6.5,
+                     h_abnt = 7 + 0.9 * length(unique(as.character(cob$unidade_analise))))
+    }
+
+    message("[S] Sinteses entre unidades — variacao liquida e permanencia...")
+    ds_s <- tryCatch(.dados_sintese(), error = function(e) { message("  ERRO: ", e$message); NULL })
+    if (!is.null(ds_s)) {
+      n_un_s <- nlevels(ds_s$dv$unidade_analise)
+      n_cl_s <- length(ds_s$ord_cl)
+      .salva_s <- function(nome, f, ...) {
+        p <- tryCatch(f(ds_s), error = function(e) { message("  ERRO [", nome, "]: ", e$message); NULL })
+        if (!is.null(p)) salvar_grafico(nome, p, ...)
+      }
+      .salva_s("S1_sintese_variacao_bolhas", .grafico_S1, w = 13, h = 3 + 0.7 * n_un_s,
+               h_abnt = 5.5 + 1.25 * n_un_s)
+      .salva_s("S2_sintese_variacao_por_classe", .grafico_S2, w = 12, h = 2 + 2.4 * ceiling(n_cl_s / 3),
+               h_abnt = 4.5 + 4.2 * ceiling(n_cl_s / 3), manter_caption = TRUE)
+      .salva_s("S3_sintese_permanencia", .grafico_S3, w = 13, h = 3 + 0.6 * n_un_s,
+               h_abnt = 5 + 1.0 * n_un_s)
+      .salva_s("S4_sintese_variacao_permanencia", .grafico_S4, w = 13, h = 5 + 1.3 * n_un_s,
+               h_abnt = 8.5 + 2.2 * n_un_s)
     }
 
     message("[D] Dispersao — Cobertura Natural x Antropica...")
     p_d <- tryCatch(.grafico_dispersao_mv(), error = function(e) { message("  ERRO: ", e$message); NULL })
     if (!is.null(p_d)) {
-      salvar_grafico("D_dispersao_natural_antropico", p_d, w = 12, h = 8)
+      salvar_grafico("D_dispersao_natural_antropico", p_d, w = 12, h = 8, h_abnt = 18)
     }
 
     message("[E] Matriz de bolhas — fluxos de transicao (todos os pares origem x destino)...")
     p_e <- tryCatch(.grafico_sankey_mv(), error = function(e) { message("  ERRO: ", e$message); NULL })
     if (!is.null(p_e)) {
-      salvar_grafico("E_matriz_bolhas_transicao", p_e, w = 8.27, h = 13)
+      salvar_grafico("E_matriz_bolhas_transicao", p_e, w = 8.27, h = 13, h_abnt = 20)
     }
 
     unidades_mv <- unique(as.character(cob$unidade_analise))
@@ -2715,7 +3270,7 @@ if (GERAR_MULTIVAR) {
       slug_mv <- .slug(u_mv)
       p_g <- tryCatch(.grafico_painel_delta_alt(u_mv),
                       error=function(e){message("  ERRO [G] ",u_mv,": ",e$message);NULL})
-      if (!is.null(p_g)) { salvar_grafico(paste0("G_painel_delta_alt_",slug_mv),p_g,w=14,h=7) }
+      if (!is.null(p_g)) { salvar_grafico(paste0("G_painel_delta_alt_",slug_mv),p_g,w=14,h=7,h_abnt=11) }
     }
 
     message("[E2] Sankey por unidade...")
@@ -2723,22 +3278,27 @@ if (GERAR_MULTIVAR) {
       slug_mv <- .slug(u_mv)
       p_e2 <- tryCatch(.grafico_sankey_unidade(u_mv),
                        error=function(e){message("  ERRO [E2] ",u_mv,": ",e$message);NULL})
-      if (!is.null(p_e2)) { salvar_grafico(paste0("E2_sankey_",slug_mv),p_e2,w=8.27,h=13) }
+      if (!is.null(p_e2)) { salvar_grafico(paste0("E2_sankey_",slug_mv),p_e2,w=8.27,h=13,h_abnt=18) }
     }
 
-    message("[H] Painel Delta + Sankey por unidade...")
+    message("[H] Variacao liquida por unidade...")
     for (u_mv in unidades_mv) {
       slug_mv <- .slug(u_mv)
-      p_h <- tryCatch(.grafico_painel_delta_sankey(u_mv),
+      p_h <- tryCatch(.grafico_variacao_liquida(u_mv),
                       error=function(e){message("  ERRO [H] ",u_mv,": ",e$message);NULL})
-      if (!is.null(p_h)) { salvar_grafico(paste0("H_delta_sankey_",slug_mv),p_h,w=16,h=8) }
+      if (!is.null(p_h)) { salvar_grafico(paste0("H_variacao_liquida_",slug_mv),p_h,w=10,h=7,h_abnt=11) }
     }
     
     message("[F] Chord diagram — transicoes circular...")
     if ("png" %in% FORMATO_SAIDA) {
       arq_chord <- file.path(pasta_saida, "F_chord_transicao.png")
       tryCatch({
-        png(arq_chord, width = 2400, height = 2400, res = 200)
+        if (ABNT) {
+          png(arq_chord, width = LARGURA_ABNT_CM, height = LARGURA_ABNT_CM,
+              units = "cm", res = DPI_ABNT, pointsize = 9)
+        } else {
+          png(arq_chord, width = 2400, height = 2400, res = 200)
+        }
         .grafico_chord_mv()
         dev.off()
         cat(" Salvo: F_chord_transicao.png\n")
@@ -2748,4 +3308,5 @@ if (GERAR_MULTIVAR) {
   } # fim exists(cob)
 } # fim GERAR_MULTIVAR
 
+.escrever_legendas_abnt()
 message("\n=== Concluido! Arquivos em: ", pasta_saida, " ===\n")
