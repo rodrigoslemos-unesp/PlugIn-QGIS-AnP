@@ -501,14 +501,10 @@ class AnPFragmentacaoDialog(QDialog):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
         if resp == QMessageBox.Yes:
-            import subprocess, sys
+            from qgis.PyQt.QtGui import QDesktopServices
+            from qgis.PyQt.QtCore import QUrl
             pasta = os.path.dirname(arquivos[0])
-            if sys.platform == 'win32':
-                os.startfile(pasta)
-            elif sys.platform == 'darwin':
-                subprocess.Popen(['open', pasta])
-            else:
-                subprocess.Popen(['xdg-open', pasta])
+            QDesktopServices.openUrl(QUrl.fromLocalFile(pasta))
 
     def _erro(self, msg):
         self.prog_bar.setVisible(False); self.btn_exec.setEnabled(True)
