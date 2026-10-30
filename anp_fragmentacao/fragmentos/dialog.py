@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AnP — Fragmentos: interface principal (v1.1)."""
+"""AnP — Fragmentos: interface principal (v1.2)."""
 import os
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,

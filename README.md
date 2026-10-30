@@ -1,14 +1,14 @@
 # PlugIn-QGIS-AnP
 Conjunto de plugins QGIS para análise de cobertura e uso da terra e fragmentação de paisagens naturais com dados MapBiomas Coleção 10. Prof. Dr. Rodrigo Silva Lemos, Departamento de Geografia e Planejamento Ambiental/IGCE — Unesp Rio Claro    · rodrigo.s.lemos@unesp.br.  Grupo de Pesquisa: Planejamento Ambiental e Dinâmicas da Paisagem
 
-## Plugins (versão 1.1)
+## Plugins (versão 1.2)
 
 Os arquivos de instalação (`.zip`) estão na página de [Releases](https://github.com/rodrigoslemos-unesp/PlugIn-QGIS-AnP/releases/latest). O código-fonte de cada plugin está na pasta indicada na tabela.
 
 | Arquivo (Releases) | Código-fonte | Plugin | Módulos |
 |---|---|---|---|
-| `AnP_Analise_Monitoria_v1.1.zip` | [`anp_analise_monitoria/`](anp_analise_monitoria) | AnP - Análise e Monitoria da Paisagem (v1.1) | Preparação (alinhar/recortar/reprojetar), Relatório (composição multi-ano) e Monitoria (comparação entre dois anos e matriz de transição) |
-| `AnP_Fragmentacao_v1.1.zip` | [`anp_fragmentacao/`](anp_fragmentacao) | AnP - Fragmentação da Paisagem (v1.1) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
+| `AnP_Analise_Monitoria_v1.2.zip` | [`anp_analise_monitoria/`](anp_analise_monitoria) | AnP - Análise e Monitoria da Paisagem (v1.2) | Preparação (alinhar/recortar/reprojetar), Relatório (composição multi-ano) e Monitoria (comparação entre dois anos e matriz de transição) |
+| `AnP_Fragmentacao_v1.2.zip` | [`anp_fragmentacao/`](anp_fragmentacao) | AnP - Fragmentação da Paisagem (v1.2) | Análise temporal (métricas de classe e paisagem via PyLandStats) e análise de fragmentos (vetorização com métricas por polígono) |
 
 Os plugins Preparação, Relatório e Monitoria, distribuídos separadamente até a versão 1.0, agora fazem parte de um único plugin com menu de seleção de módulo.
 
@@ -23,6 +23,15 @@ A análise temporal de fragmentação exige o pacote Python `pylandstats`. Os pl
 Na versão 1.1, a pasta do plugin **AnP - Análise e Monitoria da Paisagem** mudou de nome (`AnP_Analise_Monitoria_v1_0_1` → `anp_analise_monitoria`). Por isso, quem tem a versão anterior instalada (1.0.x) **deve desinstalá-la antes** de instalar a nova: em **Complementos → Gerenciar e instalar complementos → Instalados**, selecione o plugin e clique em **Desinstalar complemento**. Sem isso, o QGIS mantém as duas versões lado a lado, com o mesmo nome no menu.
 
 O plugin **AnP - Fragmentação da Paisagem** manteve o nome da pasta e pode ser atualizado diretamente.
+
+## Gráficos (script R)
+
+O script [`AnP_visualizacoes_v1.2.R`](AnP_visualizacoes_v1.2.R) gera os gráficos a partir das planilhas dos plugins: cobertura e alterações, matriz de transição, fragmentação, composição de cobertura, análises multivariadas e sínteses entre unidades de análise. Abra-o no R ou RStudio e execute com **Source**; o script pergunta quais famílias de gráficos gerar, o formato (PNG/SVG) e o perfil das figuras:
+
+- **ABNT (padrão):** figuras com 16 cm de largura (página A4), 300 dpi e fontes legíveis impressas, para relatórios e artigos. Insira as imagens a 100%, sem redimensionar. O script gera também `legendas_figuras_ABNT.txt`, com título, nota e fonte sugeridos para cada figura.
+- **Tela:** figuras amplas, com título, subtítulo e fonte na própria imagem.
+
+Os pacotes R necessários são instalados automaticamente na primeira execução.
 
 ## Como citar
 

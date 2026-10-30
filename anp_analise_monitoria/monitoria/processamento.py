@@ -1,5 +1,5 @@
 """
-AnP v1.1 — Monitoria de Cobertura da Terra
+AnP v1.2 — Monitoria de Cobertura da Terra
 Processamento de rasters MapBiomas.
 
 Novidade: alinhamento automático de grade via GDAL Warp

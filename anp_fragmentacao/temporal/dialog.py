@@ -1,4 +1,4 @@
-"""AnP Fragmentação — Interface principal v1.1"""
+"""AnP Fragmentação — Interface principal v1.2"""
 import os
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,

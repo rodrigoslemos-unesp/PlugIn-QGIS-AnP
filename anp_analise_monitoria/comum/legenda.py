@@ -1,5 +1,5 @@
 """
-AnP v1.1 — Legendas MapBiomas Coleção 10.
+AnP v1.2 — Legendas MapBiomas Coleção 10.
 Suporte a Landsat (30m) e Sentinel-2 (10m).
 Hierarquia de 4 níveis para agregação comparativa.
 """

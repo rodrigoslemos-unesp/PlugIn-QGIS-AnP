@@ -1,4 +1,4 @@
-"""AnP — Relatório de Cobertura da Terra v1.1 — Interface"""
+"""AnP — Relatório de Cobertura da Terra v1.2 — Interface"""
 import os
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,

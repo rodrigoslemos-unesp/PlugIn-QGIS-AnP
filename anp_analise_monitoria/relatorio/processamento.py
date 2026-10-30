@@ -1,5 +1,5 @@
 """
-AnP — Relatório de Cobertura da Terra v1.1
+AnP — Relatório de Cobertura da Terra v1.2
 Processa múltiplos rasters (anos) mantendo o código original de cada pixel
 (nível mais detalhado disponível no raster) e anexando os códigos e nomes
 de todos os níveis ancestrais (N1–N4) como colunas — formato tidy único,

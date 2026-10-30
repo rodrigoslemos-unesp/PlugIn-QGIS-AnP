@@ -1,4 +1,4 @@
-"""AnP — Preparação de Dados v1.1 — Interface reestruturada"""
+"""AnP — Preparação de Dados v1.2 — Interface reestruturada"""
 import os
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,

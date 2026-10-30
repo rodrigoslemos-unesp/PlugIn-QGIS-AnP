@@ -1,5 +1,5 @@
 """
-AnP — Preparação de Dados v1.1
+AnP — Preparação de Dados v1.2
 Três operações independentes e combináveis:
   A) Alinhar grades (snap ao raster de referência)
   B) Recortar por shapefile

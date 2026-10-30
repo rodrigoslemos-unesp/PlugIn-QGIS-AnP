@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AnP — Análise e Monitoria da Paisagem (plugin integrado) v1.1"""
+"""AnP — Análise e Monitoria da Paisagem (plugin integrado) v1.2"""
 import os
 from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon

@@ -4,7 +4,7 @@
 #  Rodrigo Lemos — DGPA / UNESP Rio Claro
 #  Versão 1.2 (2025)
 #
-#  Compatível com os plugins AnP v1.1 (e com planilhas de versões
+#  Compatível com os plugins AnP v1.1 e v1.2 (e com planilhas de versões
 #  anteriores dos módulos).
 #
 #  Novidades da 1.2:

@@ -11,7 +11,7 @@ Usa exclusivamente o motor xlsx_writer (sem openpyxl).
 """
 
 # ── Metadados gerais (institucionais) — fonte única da verdade ────────────────
-VERSAO_SUITE  = "1.1"
+VERSAO_SUITE  = "1.2"
 AUTOR         = "Prof. Dr. Rodrigo Silva Lemos"
 INSTITUICAO   = ("Departamento de Geografia e Planejamento Ambiental "
                  "(DGPA/IGCE) — Unesp, Câmpus Rio Claro")

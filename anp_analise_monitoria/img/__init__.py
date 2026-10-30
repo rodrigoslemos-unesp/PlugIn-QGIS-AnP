@@ -1,5 +1,5 @@
 # AnP — Análise e Monitoria da Paisagem (plugin integrado)
-# Preparação + Relatório + Monitoria  ·  v1.1
+# Preparação + Relatório + Monitoria  ·  v1.2
 # Prof. Dr. Rodrigo Silva Lemos | DGPA/IGCE — Unesp Rio Claro
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """AnP — Fragmentação: aba "Metadados e Como Citar" PADRONIZADA (motor xlsx_writer)."""
 
-VERSAO_SUITE = "1.1"
+VERSAO_SUITE = "1.2"
 AUTOR        = "Prof. Dr. Rodrigo Silva Lemos"
 INSTITUICAO  = ("Departamento de Geografia e Planejamento Ambiental "
                 "(DGPA/IGCE) — Unesp, Câmpus Rio Claro")
